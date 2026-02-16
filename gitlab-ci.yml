@@ -1,0 +1,50 @@
+stages:
+  - install
+  - lint
+  - test
+  - build
+
+default:
+  image: node:20-bullseye
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - .npm/
+      - node_modules/
+      - .next/cache/
+  before_script:
+    - node -v
+    - npm -v
+    - npm config set cache .npm --global
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+install:
+  stage: install
+  script:
+    - npm ci
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - node_modules/
+
+lint:
+  stage: lint
+  dependencies: [install]
+  script:
+    - npm run lint
+
+test:
+  stage: test
+  dependencies: [install]
+  script:
+    - npm test --if-present
+
+build:
+  stage: build
+  dependencies: [install]
+  script:
+    - npm run build
