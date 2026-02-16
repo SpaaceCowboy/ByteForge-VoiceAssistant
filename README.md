@@ -1,93 +1,275 @@
-# Voice Asistant
 
-
-
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## Architecture
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/byteforge2664906/voice-asistant.git
-git branch -M main
-git push -uf origin main
+Phone Call → Twilio → WebSocket
+                         ↓
+              Deepgram (Speech-to-Text)
+                         ↓
+              Conversation Service
+                    ↙       ↘
+            OpenAI           Database
+        (Function Calling)   (PostgreSQL)
+                    ↘       ↙
+                TTS (OpenAI/ElevenLabs)
+                         ↓
+                      Twilio
+                         ↓
+                      Caller
 ```
 
-## Integrate with your tools
+## Project Structure
 
-* [Set up project integrations](https://gitlab.com/byteforge2664906/voice-asistant/-/settings/integrations)
+```
+ai-voice-assistant-ts/  
+├── src/
+│   ├── config/
+│   │   ├── database.ts    # PostgreSQL connection pool
+│   │   └── redis.ts       # Redis session management
+│   ├── functions/
+│   │   └── tools.ts       # OpenAI function definitions
+│   ├── models/
+│   │   ├── customer.ts    # Customer database operations
+│   │   ├── reservation.ts # Reservation management
+│   │   ├── callLog.ts     # Call logging
+│   │   ├── faq.ts         # FAQ lookup
+│   │   └── index.ts
+│   ├── routes/
+│   │   ├── twilio.ts      # Twilio webhooks & WebSocket
+│   │   ├── api.ts         # REST API endpoints
+│   │   └── index.ts
+│   ├── services/
+│   │   ├── conversation.ts # Main orchestrator
+│   │   ├── openai.ts      # LLM integration
+│   │   ├── deepgram.ts    # Speech-to-text
+│   │   ├── tts.ts         # Text-to-speech
+│   │   └── index.ts
+│   ├── utils/
+│   │   ├── helpers.ts     # Utility functions
+│   │   └── logger.ts      # Logging
+│   └── server.ts          # Entry point
+├── types/
+│   └── index.ts           # TypeScript definitions
+├── migrations/
+│   └── 001_initial.sql    # Database schema
+├── package.json
+├── tsconfig.json
+└── .env.example
+```
 
-## Collaborate with your team
+## Prerequisites
 
-* [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+- Node.js 18+
+- PostgreSQL 14+
+- Redis 6+
+- Twilio Account
+- Deepgram API Key
+- OpenAI API Key
+- (Optional) ElevenLabs API Key
 
-## Test and Deploy
+## Quick Start
 
-Use the built-in continuous integration in GitLab.
+### 1. Clone and Install
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+```bash
+git clone <repo>
+cd ai-voice-assistant-ts
+npm install
+```
 
-***
+### 2. Configure Environment
 
-# Editing this README
+```bash
+cp .env.example .env
+# Edit .env with your API keys
+```
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+### 3. Set Up Database
 
-## Suggestions for a good README
+```bash
+# Create PostgreSQL database
+createdb voice_assistant
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+# Run migrations
+psql -d voice_assistant -f migrations/001_initial.sql
+```
 
-## Name
-Choose a self-explaining name for your project.
+### 4. Start Redis
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+```bash
+redis-server
+```
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+### 5. Run Development Server
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+```bash
+npm run dev
+```
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+### 6. Expose with ngrok (for Twilio)
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```bash
+ngrok http 3000
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+### 7. Configure Twilio
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+1. Go to Twilio Console → Phone Numbers
+2. Select your phone number
+3. Set Voice Configuration:
+   - **A Call Comes In**: Webhook
+   - **URL**: `https://your-ngrok-url/twilio/voice`
+   - **Method**: POST
+4. Set Status Callback:
+   - **URL**: `https://your-ngrok-url/twilio/status`
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+## Environment Variables
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `PORT` | Server port (default: 3000) | No |
+| `DATABASE_URL` | PostgreSQL connection string | Yes |
+| `REDIS_URL` | Redis connection string | Yes |
+| `TWILIO_ACCOUNT_SID` | Twilio Account SID | Yes |
+| `TWILIO_AUTH_TOKEN` | Twilio Auth Token | Yes |
+| `TWILIO_PHONE_NUMBER` | Your Twilio phone number | Yes |
+| `DEEPGRAM_API_KEY` | Deepgram API key | Yes |
+| `OPENAI_API_KEY` | OpenAI API key | Yes |
+| `OPENAI_MODEL` | OpenAI model (default: gpt-4o) | No |
+| `TTS_PROVIDER` | 'openai' or 'elevenlabs' | No |
+| `OPENAI_TTS_VOICE` | Voice for OpenAI TTS | No |
+| `ELEVENLABS_API_KEY` | ElevenLabs API key | No |
+| `BUSINESS_NAME` | Your business name | Yes |
+| `BUSINESS_OPENING_HOUR` | Opening time (HH:MM) | No |
+| `BUSINESS_CLOSING_HOUR` | Closing time (HH:MM) | No |
+| `TRANSFER_NUMBER` | Number to transfer calls | No |
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+## API Endpoints
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+### Health & Status
+- `GET /` - Server info
+- `GET /api/health` - Health check
+
+### Reservations
+- `GET /api/reservations` - List reservations
+- `GET /api/reservations/:id` - Get reservation
+- `PATCH /api/reservations/:id` - Update reservation
+- `DELETE /api/reservations/:id` - Cancel reservation
+
+### Customers
+- `GET /api/customers/search?q=query` - Search customers
+- `GET /api/customers/:id` - Get customer with history
+
+### Call Logs
+- `GET /api/calls` - List calls
+- `GET /api/calls/:callSid` - Get call details
+
+### Analytics
+- `GET /api/analytics/overview` - Call & reservation stats
+- `GET /api/analytics/intents` - Intent breakdown
+- `GET /api/analytics/hourly` - Hourly distribution
+
+### FAQs
+- `GET /api/faqs` - List FAQs
+- `POST /api/faqs` - Create FAQ
+- `PATCH /api/faqs/:id` - Update FAQ
+- `DELETE /api/faqs/:id` - Deactivate FAQ
+
+## Available Scripts
+
+```bash
+npm run dev       # Development with hot reload
+npm run build     # Compile TypeScript
+npm start         # Run compiled code
+npm run typecheck # Type checking only
+npm run lint      # Run ESLint
+```
+
+## Function Calling
+
+The AI can perform these actions during a call:
+
+| Function | Description |
+|----------|-------------|
+| `check_availability` | Check if time slot is available |
+| `create_reservation` | Book a new reservation |
+| `modify_reservation` | Change existing booking |
+| `cancel_reservation` | Cancel a booking |
+| `get_customer_reservations` | List customer's bookings |
+| `update_customer_name` | Save customer's name |
+| `answer_faq` | Look up FAQ answers |
+| `transfer_to_human` | Transfer to staff |
+| `end_call` | End the conversation |
+
+## WebSocket vs Simple Mode
+
+### WebSocket Mode (Recommended)
+- Lowest latency
+- Real-time bidirectional audio
+- Uses `/twilio/voice` endpoint
+
+### Simple Mode
+- Higher latency but simpler
+- Uses Twilio's built-in Gather
+- Uses `/twilio/voice-simple` endpoint
+
+## Database Schema
+
+The application uses these tables:
+
+- `customers` - Caller information
+- `reservations` - Booking records
+- `call_logs` - Call history & transcripts
+- `faq_responses` - Pre-defined answers
+- `conversation_sessions` - Session backup
+- `business_settings` - Configuration
+- `blocked_times` - Unavailable slots
+
+## Security Considerations
+
+- All SQL queries use parameterized statements
+- Environment variables for secrets
+- Helmet middleware for HTTP headers
+- Rate limiting on API routes
+- CORS configuration
+
+## Production Deployment
+
+1. Build the TypeScript:
+   ```bash
+   npm run build
+   ```
+
+2. Use a process manager:
+   ```bash
+   pm2 start dist/server.js --name voice-assistant
+   ```
+
+3. Set up SSL/TLS (required for Twilio)
+
+4. Configure environment variables
+
+5. Set up monitoring and logging
+
+## Troubleshooting
+
+### No audio response
+- Check TTS API key configuration
+- Verify Twilio media stream is connected
+
+### Transcription not working
+- Verify Deepgram API key
+- Check audio format (should be mulaw 8kHz)
+
+### Database errors
+- Ensure PostgreSQL is running
+- Check DATABASE_URL format
+- Run migrations
+
+### Redis connection failed
+- Verify Redis is running
+- Check REDIS_URL format
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+MIT
