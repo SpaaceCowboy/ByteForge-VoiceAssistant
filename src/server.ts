@@ -5,7 +5,7 @@ import helmet from 'helmet'
 import cors from 'cors'
 import morgan from 'morgan'
 import rateLimit from 'express-rate-limit'
-
+import logger from './utils/logger'
 import redis from './config/redis'
 
 //variables

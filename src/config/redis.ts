@@ -137,7 +137,7 @@ export async function updateSession(
   //add a message to the conversation history
 
   export async function addMessage(callSid: string, message: Message): Promise<void> {
-    const session = await get Session(callSid);
+    const session = await getSession(callSid);
 
     if (!session) {
         logger.warn('Cannot add message to non-existent session', { callSid });
