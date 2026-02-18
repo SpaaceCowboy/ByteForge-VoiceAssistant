@@ -204,7 +204,7 @@ export async function chat(
     transcript: string
   ): Promise<{sentiment: string; score: number}> {
     try{
-        const reponse = await openai.chat.completions.create({
+        const response = await openai.chat.completions.create({
             model: 'gpt-4o-mini',
             messages: [
                 {
