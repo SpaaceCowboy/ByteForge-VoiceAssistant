@@ -5,7 +5,7 @@ import type { Session, Message, SessionState, CollectedData } from '../../index'
 //redis client
 
 const client: RedisClientType = createClient({
-    url: process.env.Redis_URL || 'redis://localhost:6379',
+    url: process.env.REDIS_URL || 'redis://localhost:6379',
     socket: {
         reconnectStrategy: (retries: number): number | Error => {
             if (retries > 10) {
@@ -22,7 +22,7 @@ const client: RedisClientType = createClient({
 
 //event handler 
 client.on('connect', () => {
-    logger.error('Redis: Connected');
+    logger.info('Redis: Connected');
 });
 
 client.on('error', (err: Error) => {

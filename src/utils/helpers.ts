@@ -10,7 +10,7 @@ export function parseDate(dateStr: string): string | null {
     const today = new Date();
     today.setHours(0, 0, 0, 0)
 
-    if (input === 'todat') {
+    if (input === 'today') {
         return formatDate(today)
     }
     
@@ -22,13 +22,13 @@ export function parseDate(dateStr: string): string | null {
     }
 
     //next weekday
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturda']
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
     const nextMatch = input.match(/next\s+(\w+)/)
     if (nextMatch) {
         const dayIndex = dayNames.indexOf(nextMatch[1]);
         if (dayIndex !== -1) {
             const date = new Date(today);
-            const currentDay = date.getDate();
+            const currentDay = date.getDay();
             let daysToAdd = dayIndex - currentDay;
             if (daysToAdd <= 0) daysToAdd += 7;
             date.setDate(date.getDate() + daysToAdd);
@@ -42,7 +42,7 @@ export function parseDate(dateStr: string): string | null {
         const dayIndex = dayNames.indexOf(thisMatch[1]);
         if (dayIndex !== -1) {
             const date = new Date(today);
-            const currentDay = date.getDate();
+            const currentDay = date.getDay();
             let daysToAdd = dayIndex - currentDay;
             if (daysToAdd <0 ) daysToAdd += 7;
             date.setDate(date.getDate() +daysToAdd );
@@ -99,7 +99,7 @@ export function parseTime(timeStr: string): string | null {
         'noon': 12, 'midday': 12,
         'midnight': 0,
         'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
-        'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten:': 10,
+        'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
         'eleven': 11, 'twelve': 12
     };
 
@@ -345,9 +345,9 @@ export function truncate(text: string, maxLength: number): string {
 export function titleCase(text: string): string {
     return text
     .toLowerCase()
-    .split('')
+    .split(' ')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join('')
+    .join(' ')
 }
 
 export default {

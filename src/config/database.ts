@@ -20,7 +20,7 @@ const getPoolConfig = () => {
         user: process.env.DB_USER || 'postgres',
         password: process.env.DB_PASSWORD || '',
         ssl: process.env.NODE_ENV === 'production'
-         ? { rejectUnathorized: false}
+         ? { rejectUnauthorized : false}
          : false,
     };
 };
@@ -35,7 +35,7 @@ const pool = new Pool({
 //log poll event 
 
 pool.on('connect', () => {
-    logger.error('Database pool: bew client connected',)
+    logger.info('Database pool: new client connected',)
 });
 
 pool.on('error', (err: Error) => {
@@ -83,7 +83,7 @@ export async function transaction<T>(
     const client = await pool.connect();
 
     try {
-        await client.query('Begine');
+        await client.query('begin');
         const result = await callback(client);
         await client.query('COMMIT');
         return result;

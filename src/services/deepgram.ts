@@ -25,7 +25,7 @@ export function createLiveTranscription(callbacks: DeepgramCallbacks): DeepgramC
 
         //features
         smart_format: true,
-        puntuate: true,
+        punctuate: true,
         interim_results: true, //get results while speaking
         utterance_end_ms: 1000, // detect end of speech after 1s silence
         vad_events: true, //voice activity
@@ -111,7 +111,7 @@ export async function transcribeFile(
             {
                 model: 'nova-2',
                 smart_format: true,
-                puntuate: true,
+                punctuate: true,
                 detect_language: true,
                 mimetype,
             }

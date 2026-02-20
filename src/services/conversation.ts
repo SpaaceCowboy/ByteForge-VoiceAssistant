@@ -1,9 +1,6 @@
-//manages the flow of conversion, function execution, and cordinates between all other serviices.
+//manages the flow of , function execution, and cordinates between all other serviices.
 
-import customerModel from '../models/customer';
-import reservationModel from '../models/reservation';
-import callLogModel from '../models/callLog';
-import faqModel from '../models/faq';
+import { customerModel, callLogModel, faqModel, reservationModel } from '@/models';
 import openaiService from './openai';
 import ttsService from './tts';
 import redis from '../config/redis';
@@ -28,13 +25,13 @@ import openai from './openai';
 
 //initialization
 
-//initialize a new conversion session when a call starts
+//initialize a new conversation session when a call starts
 export async function initializeConversation(
     callSid: string,
     fromNumber: string,
     toNumber: string
 ): Promise<Session> {
-    logger.call(callSid, 'info', 'Initializing conversion', {from: fromNumber});
+    logger.call(callSid, 'info', 'Initializing conversatiin', {from: fromNumber});
 
     //find or create the customer
     const customer = await customerModel.findOrCreate(fromNumber);
@@ -90,37 +87,46 @@ export async function generateGreeting(callSid: string): Promise<GreetingRespons
 
   let greeting: string;
 
-  if (customer?.full_name && reservationModel.length > 0) {
-    // returning customer with upcoming reservation
+  if (customer?.full_name && reservations.length > 0) {
+    // Returning customer with upcoming reservation
     const nextRes = reservations[0];
-    greeting = `Hello ${customer.full_name}! Thank you for calling ${businessName}
-    I see you have a reservation coming up ${formatDateForSpeech(nextRes.reservation_date)} at
-    ${formatTimeForDisplay(nextRes.reservation_time)}.
-    How can i help you today?`;
+    greeting = `Hello ${customer.full_name}! 
+    Thank you for calling ${businessName}. 
+    I see you have a reservation coming up on 
+    ${formatDateForSpeech(nextRes.reservation_date)} at
+     ${formatTimeForDisplay(nextRes.reservation_time)}. 
+    How can I help you today?`;
   } else if (customer?.full_name) {
-    // returing customer without reservation
-    greeting = `Thank you for calling ${businessName}! I'm your AI assistant and I can help
-    you make a reservation or answer questions about clinic. How can i help you today?`;
+    // Returning customer without reservation
+    greeting = `Hello ${customer.full_name}! 
+    Thank you for calling ${businessName}. How can I help you today?`;
+  } else {
+    // New customer
+    greeting = `Thank you for calling ${businessName}
+    ! I'm your AI assistant and I 
+    can help you make a reservation or answer questions about our restaurant.
+     How can I help you today?`;
   }
-
-  //generate audio
+  
+  // Generate audio
   let audio: Buffer | undefined;
   try {
     audio = await ttsService.textToSpeech(greeting);
   } catch (error) {
     logger.call(callSid, 'error', 'Failed to generate greeting audio', error);
   }
-    //add greeting to message history
-    await redis.addMessage(callSid, {
-      role: 'assistant',
-      content: greeting,
-      timestamp: new Date(),
-    });
-
-    //update session state
-    await redis.updateSessionState(callSid, { currentStep: 'listening'});
-
-    return { text: greeting, audio}
+  
+  // Add greeting to message history
+  await redis.addMessage(callSid, {
+    role: 'assistant',
+    content: greeting,
+    timestamp: new Date(),
+  });
+  
+  // Update session state
+  await redis.updateSessionState(callSid, { currentStep: 'listening' });
+  
+  return { text: greeting, audio };
 }
 
 //process user input and generate a response
@@ -248,7 +254,7 @@ async function executeFunctionCall(
       return handleModifyReservation(args);
     
     case 'cancle_reservation':
-      return handleCancleReservation(args);
+      return handleCancelReservation(args);
 
     case 'get_customer_name':
       return handleGetReservations(session);
@@ -325,7 +331,7 @@ async function handleCreateReservation(
     });
 
     //update customer stats
-    await customerModel.incrementReservation(session.customer.id);
+    await customerModel.incrementReservationCount(session.customer.id);
 
     //link reservation to call
     await callLogModel.linkReservation(callSid, reservation.id)
@@ -381,47 +387,47 @@ async function handleModifyReservation(
   }
 }
 
-async function handleCancleReservation(
+async function handleCancelReservation(
   args: Record<string, unknown>
 ): Promise<FunctionExecutionResult> {
-  const reservationId = parseInt(String(args.reservation_id))
+  const reservationId = parseInt(String(args.reservation_id));
   const reason = args.reason ? String(args.reason) : undefined;
-
+  
   try {
-    const reservation = await reservationModel.cancle(reservationId, reason);
-
+    const reservation = await reservationModel.cancel(reservationId, reason);
+    
     if (!reservation) {
-      return { success: false, error: 'Reservation not found'};
+      return { success: false, error: 'Reservation not found' };
     }
-
+    
     return {
       success: true,
-      data: {cancelled: true, reservationId},
+      data: { cancelled: true, reservationId },
     };
-
+    
   } catch (error) {
-    logger.error('Failed to cancle reservation', error);
-    return {success: false, error: 'Failed to cancle reservation'}
+    logger.error('Failed to cancel reservation', error);
+    return { success: false, error: 'Failed to cancel reservation' };
   }
 }
 
 async function handleGetReservations(session: Session): Promise<FunctionExecutionResult> {
   if (!session.customer) {
-    return {success: true, data: {reservations: []}};
+    return { success: true, data: { reservations: [] } };
   }
-
-  const reservations = await reservationModel.findUpcomingByCustomer(session.customer.id)
-
+  
+  const reservations = await reservationModel.findUpcomingByCustomer(session.customer.id);
+  
   return {
     success: true,
     data: {
       reservations: reservations.map(r => ({
         id: r.id,
         date: r.reservation_date,
-        time: r.reservation.time,
-        partySize: r.party_Size,
+        time: r.reservation_time,
+        partySize: r.party_size,
         status: r.status,
-        confirmationCode: r.confirmation_code
+        confirmationCode: r.confirmation_code,
       })),
     },
   };

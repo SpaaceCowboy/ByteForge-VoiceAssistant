@@ -1,4 +1,4 @@
-// this file defines what actions the ai can take during a conversion
+// this file defines what actions the ai can take during a cponversation
 import type { ToolDefinition, ToolContext } from "../../index";
 
 // tool definitions
@@ -166,7 +166,7 @@ export const tools: ToolDefinition[] = [
         type: 'function',
         function: {
           name: 'end_call',
-          description: 'End the conversion politely, Use when the customer indicates they are done or says goodbye.',
+          description: 'End the conversation politely, Use when the customer indicates they are done or says goodbye.',
           parameters: {
             type: 'object',
             properties: {

@@ -12,7 +12,7 @@ const openai = new OpenAI({
 });
 
 const TTS_PROVIDER: TTSProvider = (process.env.TTS_PROVIDER as TTSProvider) || 'openai'
-const OPENAI_VOICE: OpenAIVoice = (process.env.OPENAI_TTS_MODEL as OpenAIVoice) || 'tts-1';
+const OPENAI_VOICE: OpenAIVoice = (process.env.OPENAI_TTS_VOICE as OpenAIVoice) || 'tts-1';
 const OPENAI_MODEL: OpenAITTSModel = (process.env.OPENAI_TTS_MODEL as OpenAITTSModel) || 'tts-1'
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'
@@ -94,7 +94,7 @@ export async function elevenLabsTTS(text: string): Promise<Buffer> {
             }
         )
         if (!response.ok) {
-            throw new Error('ElevelLabs API error: ${response.status}');
+            throw new Error(`ElevelLabs API error: ${response.status}`);
         }
 
         const arrayBuffer = await response.arrayBuffer();
@@ -141,7 +141,7 @@ export async function elevenLabsTTSStream(text: string): Promise<NodeJS.Readable
     )
 
     if (!response.ok) {
-        throw new Error(`ElevenLabs stream erro: ${response.status}`);
+        throw new Error(`ElevenLabs stream error: ${response.status}`);
     }
 
     return response.body as unknown as NodeJS.ReadWriteStream
@@ -177,7 +177,7 @@ export function splitTextForStreaming(text: string, maxLength: number = 100): st
 
     for ( const sentence of sentences) {
         if ((currentChunk + sentence).length <= maxLength) {
-            currentChunk += sentences;
+            currentChunk += sentence;
         } else {
             if (currentChunk) {
                 chunks.push(currentChunk.trim());
