@@ -252,13 +252,13 @@ async function executeFunctionCall(
     case 'modify_reservation':
       return handleModifyReservation(args);
     
-    case 'cancele_reservation':
+    case 'cancel_reservation':
       return handleCancelReservation(args);
 
-    case 'get_customer_name':
+    case 'get_customer_reservations':
       return handleGetReservations(session);
 
-    case 'update_customer_reservation':
+    case 'update_customer_name':
       return handleUpdateName(session, args);
 
     case 'answer_faq':
