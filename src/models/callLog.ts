@@ -55,12 +55,12 @@ export async function completeCall(
       [
         callSid,
         data.status,
-        data.durationSeconds || null,
+        data.durationSeconds ?? null,
         data.transcript || null,
         data.summary || null,
         data.intent || null,
         data.sentiment || null,
-        data.sentimentScore || null,
+        data.sentimentScore ?? null,
         data.reservationId || null
       ]
     )

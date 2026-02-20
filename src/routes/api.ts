@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { customerModel, callLogModel, faqModel, reservationModel } from '@/models';
-import { getCurrentDate, formatDate } from '@/utils/helpers';
+import { customerModel, callLogModel, faqModel, reservationModel } from '../models';
+import { getCurrentDate, formatDate } from '../utils/helpers';
 import logger from '../utils/logger';
 import type { ApiResponse, PaginatedResponse } from '../../index';
 

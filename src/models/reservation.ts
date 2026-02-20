@@ -50,7 +50,7 @@ export async function checkAvailability(
 
     if (currentBookings >= maxPerSlot) {
         //find alternative slots
-        const alternatives = await findAlternativeSlots(date, time, 3);
+        const alternatives = await findAlternativeSlots(date, time, 3, partySize);
 
         return {
             available: false,
@@ -73,6 +73,7 @@ async function findAlternativeSlots(
     date:string,
     preferredTime: string,
     count: number,
+    partySize: number,
 ): Promise<Array<{ date: string; time: string; available: boolean}>> {
     const alternatives: Array<{ date: string; time: string; available: boolean;}> = [];
     const [prefHours, prefMinutes] = preferredTime.split(':').map(Number);
@@ -88,7 +89,7 @@ async function findAlternativeSlots(
         const newHour = prefHours + offset;
         if (newHour >= openingHour && newHour <= closingHour) {
             const newTime = `${newHour.toString().padStart(2, '0')}:${prefMinutes.toString().padStart(2, '0')}`
-            const availability = await checkAvailability(date, newTime, 2);
+            const availability = await checkAvailability(date, newTime, partySize);
 
             if (availability.available) {
                 alternatives.push({

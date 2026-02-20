@@ -251,8 +251,8 @@ export function formatPhoneForDisplay(phone: string): string {
       }
 
       // check business hours
-      const openingHour = process.env.BUSINESS_OPENING_HOUR || '8:00';
-      const closingHour = process.env.BUSINESS_CLOSING_HOUR || '17:00';
+      const openingHour = process.env.BUSINESS_OPENING_HOUR || '08:00';
+      const closingHour = process.env.BUSINESS_CLOSING_HOUR || '16:00';
 
       if (time < openingHour || time > closingHour) {
         return {

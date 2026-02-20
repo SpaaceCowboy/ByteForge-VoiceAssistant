@@ -144,7 +144,7 @@ export async function elevenLabsTTSStream(text: string): Promise<NodeJS.Readable
         throw new Error(`ElevenLabs stream error: ${response.status}`);
     }
 
-    return response.body as unknown as NodeJS.ReadWriteStream
+    return response.body as unknown as NodeJS.ReadableStream
 }
 
 // unified interface

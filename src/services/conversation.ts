@@ -1,6 +1,6 @@
 //manages the conversation flow, function execution, and coordinates between all other services.
 
-import { customerModel, callLogModel, faqModel, reservationModel } from '@/models';
+import { customerModel, callLogModel, faqModel, reservationModel } from '../models';
 import openaiService from './openai';
 import ttsService from './tts';
 import redis from '../config/redis';
