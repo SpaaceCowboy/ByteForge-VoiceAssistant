@@ -16,8 +16,6 @@ import type {
     DeepgramController
 } from '../../types/index'
 import type { Server } from 'http'
-import { Hangup } from 'twilio/lib/twiml/VoiceResponse'
-
 const router = Router()
 
 //twilio client for outbound actions
@@ -42,7 +40,7 @@ router.post('/voice', async (req: Request, res: Response) => {
 
         const twiml = new twilio.twiml.VoiceResponse();
         //start with a message while sets up
-        twiml.says({ voice: 'Polly.Joanna'}, 'One moment please.')
+        twiml.say({ voice: 'Polly.Joanna'}, 'One moment please.')
 
         const connect = twiml.connect();
         const stream = connect.stream({
@@ -188,7 +186,6 @@ export function setupMediaStreamWebSocket(server: Server): void {
       let callSid: string | null = null;
       let streamSid: string | null = null;
       let deepgramController: DeepgramController | null = null;
-      let audioBuffer: Buffer[] = [];
       let isProcessing = false;
       
       logger.info('Media stream WebSocket connected');

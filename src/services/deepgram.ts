@@ -82,7 +82,7 @@ export function createLiveTranscription(callbacks: DeepgramCallbacks): DeepgramC
     return {
         send: (audioData: Buffer): void => {
           if (isOpen) {
-            connection.send(audioData);
+            connection.send(audioData.buffer.slice(audioData.byteOffset, audioData.byteOffset + audioData.byteLength));
           }
         },
         close: (): void => {

@@ -1,5 +1,4 @@
-// this file defines what actions the ai can take during a cponversation
-import { describe } from "node:test";
+// this file defines what actions the ai can take during a conversation
 import type { ToolDefinition, ToolContext } from "../../types/index";
 
 // tool definitions

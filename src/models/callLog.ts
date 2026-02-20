@@ -16,7 +16,7 @@ export async function create(
 ): Promise<CallLog> {
     const result = await db.query<CallLog> (
         `INSERT INTO call_logs (call_sid, customer_id, from_number, to_number, status)
-        VALUES ($1, $2, $3, $4, in-progress)
+        VALUES ($1, $2, $3, $4, 'in-progress')
         RETURNING *`,
     [callSid, customerId || null,fromNumber, toNumber])
     
@@ -282,8 +282,8 @@ export async function getStats(
     startDate: string,
     endDate: string
   ): Promise<Array<{ date: string; avg_sentiment: number; call_count: number }>> {
-    const result = await db.query(
-      `SELECT 
+    const result = await db.query<{ date: string; avg_sentiment: number; call_count: number }>(
+      `SELECT
          DATE(started_at) as date,
          AVG(sentiment_score) as avg_sentiment,
          COUNT(*) as call_count
