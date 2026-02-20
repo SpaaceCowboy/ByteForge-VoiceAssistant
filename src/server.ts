@@ -25,6 +25,15 @@ const requiredEnvVars = [
       process.exit(1);
     }
   }
+
+  if (!process.env.TWILIO_ACCOUNT_SID!.startsWith('AC')) {
+    logger.error(
+      'TWILIO_ACCOUNT_SID must start with "AC" (Account SID). ' +
+      'It looks like you may have set an API Key SID (starts with "SK") instead. ' +
+      'Find your Account SID at https://console.twilio.com/'
+    );
+    process.exit(1);
+  }
 // app setup
 
 const app: Express = express()
