@@ -6,7 +6,7 @@ import type {
     ToolContext,
     OpenAIChatResponse,
     FunctionCallResult
-} from '../../index'
+} from '../../types/index'
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 const openai = new OpenAI({
@@ -147,7 +147,7 @@ export async function chat(
             messages: [
                 {
                     role: 'system',
-                    content: 'Summarize this phone call transcript in 2-3 sentences. focuse on the main topic and outcome',
+                    content: 'Summarize this phone call transcript in 2-3 sentences.  Focus on the main topic and outcome.',
                 },
                 {
                     role: 'user',
@@ -178,7 +178,7 @@ export async function chat(
                     - new_reservation: Customer wants to make a new booking
                     - modify_reservation: Customer wants to change an existing booking
                     - cancel_reservation: Customer wants to cancel a booking
-                    - inquiry: Customer asking about clinic details
+                    - inquiry: Customer asking about restourant details
                     - faq: General questions about hours, services, etc.
                     - complaint: Customer has a complaint
                     - other: Doesn't fit other categories

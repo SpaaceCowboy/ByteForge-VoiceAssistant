@@ -1,6 +1,6 @@
 import { createClient, LiveTranscriptionEvents } from '@deepgram/sdk'
 import logger from '../utils/logger';
-import type { DeepgramCallbacks, DeepgramController, TranscriptionResult} from '../../index'
+import type { DeepgramCallbacks, DeepgramController, TranscriptionResult} from '../../types/index'
 
 
 

@@ -1,4 +1,4 @@
-import type {LogLevel} from '../../index'
+import type {LogLevel} from '../../types/index'
 
 const colors = {
   reset: '\x1b[0m',

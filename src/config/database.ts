@@ -28,11 +28,11 @@ const getPoolConfig = () => {
 const pool = new Pool({
     ...getPoolConfig(),
     max: 20, // maximum connection poll
-    idleTimeoutMillis: 3000, //close afk connection after 30s
+    idleTimeoutMillis: 30000, //close afk connection after 30s
     connectionTimeoutMillis: 2000, // fail fast if cant connect
 });
 
-//log poll event 
+//log poll events
 
 pool.on('connect', () => {
     logger.info('Database pool: new client connected',)

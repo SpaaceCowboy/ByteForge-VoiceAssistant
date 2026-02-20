@@ -1,6 +1,6 @@
 import db from '../config/database';
 import logger from '../utils/logger';
-import type { FAQ, FAQCreateInput } from '../../index';
+import type { FAQ, FAQCreateInput } from '../../types/index';
 
 // -------------------------------------------
 // FIND OPERATIONS

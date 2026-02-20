@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { customerModel, callLogModel, faqModel, reservationModel } from '@/models';
 import { getCurrentDate, formatDate } from '@/utils/helpers';
 import logger from '../utils/logger';
-import type { ApiResponse, PaginatedResponse } from '../../index';
+import type { ApiResponse, PaginatedResponse } from '../../types/index';
 
 const router = Router()
 
@@ -69,7 +69,7 @@ router.patch('/reservations/:id', asyncHandler(async (req: Request, res:Response
     const updates = req.body;
     
     const reservation = await reservationModel.modify(id, {
-        date: updates.time,
+        date: updates.date,
         time: updates.time,
         partySize: updates.partySize,
         specialRequests: updates.specialRequests,
@@ -164,10 +164,10 @@ router.get('/calls', asyncHandler(async (req: Request, res:Response) => {
 
     let calls;
 
-    if (transferred == 'true') {
+    if (transferred === 'true') {
         calls = await callLogModel.findTransferredCalls(startDate, endDate);
     } else {
-        calls = await callLogModel.findTransferredCalls(startDate, endDate);
+        calls = await callLogModel.findRecent(startDate, endDate, parseInt(limit as string));
     }
 
     res.json({
@@ -347,7 +347,7 @@ router.post('/faqs', asyncHandler(async (req: Request, res: Response) => {
 
     res.json({
         success: true,
-        message: 'FAQ dectivated'
+        message: 'FAQ deactivated'
     })
   }))
 

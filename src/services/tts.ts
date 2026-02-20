@@ -3,7 +3,7 @@
 import OpenAI from 'openai'
 import { cleanTextForSpeech } from '../utils/helpers'
 import logger from '../utils/logger';
-import type { TTSProvider, OpenAIVoice, OpenAITTSModel} from '../../index';
+import type { TTSProvider, OpenAIVoice, OpenAITTSModel} from '../../types/index';
 
 // configuration 
 
@@ -12,7 +12,7 @@ const openai = new OpenAI({
 });
 
 const TTS_PROVIDER: TTSProvider = (process.env.TTS_PROVIDER as TTSProvider) || 'openai'
-const OPENAI_VOICE: OpenAIVoice = (process.env.OPENAI_TTS_VOICE as OpenAIVoice) || 'tts-1';
+const OPENAI_VOICE: OpenAIVoice = (process.env.OPENAI_TTS_VOICE as OpenAIVoice) || 'nova';
 const OPENAI_MODEL: OpenAITTSModel = (process.env.OPENAI_TTS_MODEL as OpenAITTSModel) || 'tts-1'
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'
@@ -94,7 +94,7 @@ export async function elevenLabsTTS(text: string): Promise<Buffer> {
             }
         )
         if (!response.ok) {
-            throw new Error(`ElevelLabs API error: ${response.status}`);
+            throw new Error(`ElevenlLabs API error: ${response.status}`);
         }
 
         const arrayBuffer = await response.arrayBuffer();

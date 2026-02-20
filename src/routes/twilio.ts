@@ -14,7 +14,7 @@ import type {
     TwilioStatusRequest,
     TwilioMediaStreamMessage,
     DeepgramController
-} from '../../index'
+} from '../../types/index'
 import type { Server } from 'http'
 import { Hangup } from 'twilio/lib/twiml/VoiceResponse'
 
@@ -46,7 +46,7 @@ router.post('/voice', async (req: Request, res: Response) => {
 
         const connect = twiml.connect();
         const stream = connect.stream({
-            url: `wws://${req.headers.host}/media-stream`,
+            url: `wss://${req.headers.host}/media-stream`,
         })
 
         stream.parameter({ name: 'callSid', value: callSid});
@@ -55,7 +55,7 @@ router.post('/voice', async (req: Request, res: Response) => {
         res.type('text/xml');
         res.send(twiml.toString())
     } catch (error) {
-        logger.error('Error handling voice webhool', error);
+        logger.error('Error handling voice webhook', error);
 
         //return error
         const twiml = new twilio.twiml.VoiceResponse();
@@ -334,7 +334,7 @@ async function transferCall(callSid: string): Promise<void> {
   
 try {
   const twiml = new twilio.twiml.VoiceResponse();
-  twiml.says({ voice: 'Polly.Joana'}, 'Transfering you now. please hold');
+  twiml.say({ voice: 'Polly.Joanna'}, 'Transfering you now. please hold');
   twiml.dial(transferNumber);
 
   await twilioClient.calls(callSid).update({
@@ -343,7 +343,7 @@ try {
 
   logger.info('Call transferred', { callSid, to: transferNumber });
 } catch (error) {
-  logger.error('failed to transfered call', error)
+  logger.error('Failed to transfer call', error)
 }
 }
 

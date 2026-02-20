@@ -1,6 +1,6 @@
 import {createClient, RedisClientType } from 'redis'
 import logger from '../utils/logger'
-import type { Session, Message, SessionState, CollectedData } from '../../index'
+import type { Session, Message, SessionState, CollectedData } from '../../types/index'
 
 //redis client
 

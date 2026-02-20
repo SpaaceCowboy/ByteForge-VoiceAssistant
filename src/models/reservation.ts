@@ -8,7 +8,7 @@ import type {
     ReservationStatus,
     AvailabilityResult,
     ReservationStats
-} from '../../index'
+} from '../../types/index'
 
 //Check if a time slot is available
 
@@ -17,14 +17,14 @@ export async function checkAvailability(
     time: string,
     partySize: number
 ): Promise<AvailabilityResult> {
-    const maxPerSlot = parseInt(process.env.Max_RESERVATIONS_PER_SLOT || '2');
+    const maxPerSlot = parseInt(process.env.MAX_RESERVATIONS_PER_SLOT || '2');
 
     //check if date is blocked (holidays, events)
     const blockedResult = await db.query(
         `SELECT reason FROM blocked_times
         WHERE (blocked_date = $1 OR (is_recurring AND 
         EXTRACT(MONTH FROM blocked_date) = EXTRACT(MONTH FROM $1::date) AND 
-        EXTRACT(DAY FROM blocked_date) EXTRACT(DAY FRO $1::date)))
+        EXTRACT(DAY FROM blocked_date) = EXTRACT(DAY FROM $1::date)))
         AND (start_time IS NULL OR $2::time BETWEEN start_time AND end_time)`,
         [date, time]
     );
@@ -41,8 +41,8 @@ export async function checkAvailability(
         `SELECT COUNT(*) as count FROM reservations
         WHERE reservation_date = $1
         AND reservation_time BETWEEN ($2::time - interval '30 minutes')
-                                AND  ($2::time + interval '30minutes')
-        AND STATUS NOT IN ('canclled', 'no-show')`,
+                                AND  ($2::time + interval '30 minutes')
+        AND status NOT IN ('cancelled', 'no-show')`,
         [date, time]
     )
 
@@ -110,7 +110,7 @@ export async function create(input: ReservationCreateInput): Promise<Reservation
     const result = await db.query<Reservation>(
         `INSERT INTO reservations (
         customer_id, reservation_date, reservation_time,
-        party_size special_requests, source, confirmation_code
+        party_size, special_requests, source, confirmation_code
         ) VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING *`,
          [
@@ -124,7 +124,7 @@ export async function create(input: ReservationCreateInput): Promise<Reservation
          ]
     );
 
-    logger.info('Reservation create', {
+    logger.info('Reservation created', {
         id: result.rows[0].id,
         confirmationCode,
         date: input.date,
@@ -139,7 +139,7 @@ export async function findById(id: number): Promise<Reservation | null> {
     const result = await db.query<Reservation>(
         `SELECT r.*, c.full_name as customer_name, c.phone
         FROM reservations r
-        JOIN CUSTOMERS C ON r.customer_id = c.id
+        JOIN customers C ON r.customer_id = c.id
         WHERE r.id = $1`,
         [id]
     );
@@ -229,7 +229,7 @@ export async function modify(
 
     if (updates.specialRequests !== undefined) {
         fields.push(`special_requests = $${paramIndex++}`);
-        values.push(updates.status)
+        values.push(updates.specialRequests)
     }
 
     if (updates.status !== undefined) {

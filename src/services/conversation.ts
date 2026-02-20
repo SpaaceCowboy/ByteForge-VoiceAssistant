@@ -1,6 +1,6 @@
 //manages the flow of , function execution, and cordinates between all other serviices.
 
-import { customerModel, callLogModel, faqModel, reservationModel } from '@/models';
+import { customerModel, callLogModel, faqModel, reservationModel } from '../models';
 import openaiService from './openai';
 import ttsService from './tts';
 import redis from '../config/redis';
@@ -17,9 +17,8 @@ import type {
   ConversationResponse,
   GreetingResponse,
   FunctionExecutionResult,
-} from '../../index.ts';
-import { open } from 'fs';
-import openai from './openai';
+} from '../../types/index';
+
 
 
 
@@ -31,7 +30,7 @@ export async function initializeConversation(
     fromNumber: string,
     toNumber: string
 ): Promise<Session> {
-    logger.call(callSid, 'info', 'Initializing conversatiin', {from: fromNumber});
+    logger.call(callSid, 'info', 'Initializing conversation', {from: fromNumber});
 
     //find or create the customer
     const customer = await customerModel.findOrCreate(fromNumber);
@@ -158,13 +157,13 @@ export async function processInput(
 
   // build context for OpenAI
   const context: ToolContext = {
-    businessName: process.env.BUISINESS_NAME || 'our clinic',
+    businessName: process.env.BUSINESS_NAME || 'our clinic',
     customerPhone: session.customer?.phone || 'unknown',
     customerName: session.customer?.full_name || null,
     reservationCount: session.customer?.total_reservations || 0,
     currentDate: getCurrentDate(),
-    openingHour: process.env.BUISINESS_OPENING_HOUR || '08:00',
-    closingHour: process.env.BUISINESS_CLOSING_HOUR || '16:00',
+    openingHour: process.env.BUSINESS_OPENING_HOUR || '08:00',
+    closingHour: process.env.BUSINESS_CLOSING_HOUR || '16:00',
   };
 
   // call openai
@@ -253,13 +252,13 @@ async function executeFunctionCall(
     case 'modify_reservation':
       return handleModifyReservation(args);
     
-    case 'cancle_reservation':
+    case 'cancele_reservation':
       return handleCancelReservation(args);
 
     case 'get_customer_name':
       return handleGetReservations(session);
 
-    case 'update_customer_name':
+    case 'update_customer_reservation':
       return handleUpdateName(session, args);
 
     case 'answer_faq':
@@ -317,7 +316,8 @@ async function handleCreateReservation(
   const date = String(args.date);
   const time = String(args.time);
   const partySize = parseInt(String(args.party_size));
-  const specialRequests = args.specialRequests? String(args.special_requests) : undefined;
+  const specialRequests = args.special_requests ? String(args.special_requests) : undefined;
+  
 
   try {
     // create the reservation
@@ -543,7 +543,7 @@ export async function handleCallEnded(
   callSid: string,
   data: { status: string; duration: number}
 ): Promise<void> {
-  logger.call(callSid, 'info', 'calle ended', data)
+  logger.call(callSid, 'info', 'call ended', data)
 
   //update call log
   const session = await redis.getSession(callSid)

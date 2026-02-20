@@ -214,11 +214,11 @@ export function formatPhoneForDisplay(phone: string): string {
     }
 
     if (size < 1) {
-        return { valid: false, error: 'Party size must be atleast 1 '};
+        return { valid: false, error: 'Party size must be at least 1 '};
     } 
 
     if (size > maxSize) {
-        return {valid: false, error: `party size cannot exceed ${maxSize}.For larger groups, please call to speak with a manager.`}
+        return {valid: false, error: `Party size cannot exceed ${maxSize}.For larger groups, please call to speak with a manager.`}
     }
 
     return { valid: true };
@@ -251,8 +251,8 @@ export function formatPhoneForDisplay(phone: string): string {
       }
 
       // check buisiness hours
-      const openingHour = process.env.BUISINESS_OPENING_HOUR || '8:00';
-      const closingHour = process.env.BUISINESS_CLOSING_HOUR || '17:00';
+      const openingHour = process.env.BUSINESS_OPENING_HOUR || '8:00';
+      const closingHour = process.env.BUSINESS_CLOSING_HOUR || '17:00';
 
       if (time < openingHour || time > closingHour) {
         return {

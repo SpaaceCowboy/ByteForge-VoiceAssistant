@@ -67,7 +67,7 @@ app.use('/api', apiLimiter)
 
 //routes
 app.use('/twilio', twilioRoutes);
-app.use('api', apiRoutes);
+app.use('/api', apiRoutes);
 app.get('/', (req: Request, res: Response) => {
     res.json( {
         name: 'AI Voice Assistant',
@@ -130,15 +130,15 @@ async function startServer(): Promise<void> {
             logger.info('='.repeat(50));
             logger.info('AI Voice Assistant Server Started');
             logger.info('='.repeat(50));
-            logger.info(`Enviroment ${process.env.NODE_ENV || 'development'}`);
+            logger.info(`Environment ${process.env.NODE_ENV || 'development'}`);
             logger.info(`Port: ${PORT}`);
-            logger.info(`TTS Provider: ${process.env.TTS_PROVID || 'openai'}`);
+            logger.info(`TTS Provider: ${process.env.TTS_PROVIDER || 'openai'}`);
             logger.info(`OpenAI Model: ${process.env.OPENAI_MODEL || 'gpt-4o'}`);
             logger.info('='.repeat(50));
             logger.info('');
-            logger.info(`Twilio Webhool URLs (configure in Twilio console):`);
-            logger.info(`voice: POST https://${process.env.YOUR_DOMAIN}/twilio/voice`);
-            logger.info(`Status: POST https://${process.env.YOUR_DOMAIN}/twilio/status`);
+            logger.info(`Twilio Webhook URLs (configure in Twilio console):`);
+            logger.info(`Voice: POST https://<your-domain>/twilio/voice`);
+            logger.info(`Status: POST https://<your-domain>/twilio/status`);
             logger.info('');
             logger.info('For local development with ngrok:');
             logger.info(` ngrok http ${PORT}`);
@@ -158,7 +158,7 @@ async function shutdown(signal: string): Promise<void> {
     const forceShutDownTimeout = setTimeout(() => {
         logger.error('Forceful shutdown due to timeout');
         process.exit(1);
-    }, 1000);
+    }, 10000);
 
     try {
         //stop accepting new connection
@@ -182,12 +182,12 @@ async function shutdown(signal: string): Promise<void> {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
-process.on('uncoughtException', (error: Error) => {
-    logger.error('Uncought exception', error);
-    shutdown('uncoughtException');
+process.on('uncaughtException', (error: Error) => {
+    logger.error('Uncaught exception', error);
+    shutdown('uncaughtException');
 });
 
-process.on('unhandleRejection', (reason: unknown) => {
+process.on('unhandledRejection', (reason: unknown) => {
     logger.error('Unhandled promise rejection', reason)
 })
 
