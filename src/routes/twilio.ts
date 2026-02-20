@@ -18,11 +18,25 @@ import type {
 import type { Server } from 'http'
 const router = Router()
 
-//twilio client for outbound actions
-const twilioClient = twilio(
-    process.env.TWILIO_ACCOUNT_SID,
-    process.env.TWILIO_AUTH_TOKEN
-)
+//twilio client for outbound actions (lazy-initialized to avoid crash at import time)
+let _twilioClient: ReturnType<typeof twilio> | null = null;
+
+function getTwilioClient(): ReturnType<typeof twilio> {
+    if (!_twilioClient) {
+        const accountSid = process.env.TWILIO_ACCOUNT_SID;
+        const authToken = process.env.TWILIO_AUTH_TOKEN;
+
+        if (!accountSid || !accountSid.startsWith('AC')) {
+            throw new Error(
+                `TWILIO_ACCOUNT_SID must start with "AC". Got: "${accountSid?.substring(0, 4) ?? '(empty)'}...". ` +
+                'Find your Account SID at https://console.twilio.com/ (not an API Key SID which starts with "SK").'
+            );
+        }
+
+        _twilioClient = twilio(accountSid, authToken);
+    }
+    return _twilioClient;
+}
 
 // VOICE WEBHOOK (MEDIA STREAMS)
 
@@ -313,7 +327,7 @@ async function sendAudioResponse(
 //hang up a call
 async function hangupCall(callSid: string): Promise<void> {
   try {
-    await twilioClient.calls(callSid).update({ status: 'completed'});
+    await getTwilioClient().calls(callSid).update({ status: 'completed'});
     logger.info('Call hung up', {callSid});
   } catch (error) {
     logger.error('Failed to hang up call', error)
@@ -334,7 +348,7 @@ try {
   twiml.say({ voice: 'Polly.Joanna'}, 'Transfering you now. please hold');
   twiml.dial(transferNumber);
 
-  await twilioClient.calls(callSid).update({
+  await getTwilioClient().calls(callSid).update({
     twiml: twiml.toString(),
   })
 
@@ -345,7 +359,7 @@ try {
 }
 
 export async function updateCall(callSid: string, twimlString: string): Promise<void> {
-  await twilioClient.calls(callSid).update({ twiml: twimlString });
+  await getTwilioClient().calls(callSid).update({ twiml: twimlString });
 }
 
 export default router;
