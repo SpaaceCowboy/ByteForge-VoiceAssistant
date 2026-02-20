@@ -69,7 +69,7 @@ router.patch('/reservations/:id', asyncHandler(async (req: Request, res:Response
     const updates = req.body;
     
     const reservation = await reservationModel.modify(id, {
-        date: updates.time,
+        date: updates.date,
         time: updates.time,
         partySize: updates.partySize,
         specialRequests: updates.specialRequests,
@@ -91,7 +91,7 @@ router.patch('/reservations/:id', asyncHandler(async (req: Request, res:Response
     })
 }))
 
-// cancle reservation
+// cancel reservation
 router.delete('/reservations/:id', asyncHandler(async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const { reason } = req.body;
@@ -164,10 +164,10 @@ router.get('/calls', asyncHandler(async (req: Request, res:Response) => {
 
     let calls;
 
-    if (transferred == 'true') {
+    if (transferred === 'true') {
         calls = await callLogModel.findTransferredCalls(startDate, endDate);
     } else {
-        calls = await callLogModel.findTransferredCalls(startDate, endDate);
+        calls = await callLogModel.findRecent(startDate, endDate, parseInt(limit as string));
     }
 
     res.json({
@@ -198,7 +198,7 @@ router.get('/calls/:callSid', asyncHandler(async (req: Request, res: Response) =
 
 //ANALYTICS
 
-//get overcuew statistics
+//get overview statistics
 router.get('/analytics/overview', asyncHandler(async (req: Request, res: Response) => {
     const { start_date, end_date} = req.query;
 
@@ -347,7 +347,7 @@ router.post('/faqs', asyncHandler(async (req: Request, res: Response) => {
 
     res.json({
         success: true,
-        message: 'FAQ dectivated'
+        message: 'FAQ deactivated'
     })
   }))
 

@@ -16,7 +16,6 @@ import type {
     DeepgramController
 } from '../../index'
 import type { Server } from 'http'
-import { Hangup } from 'twilio/lib/twiml/VoiceResponse'
 
 const router = Router()
 
@@ -42,11 +41,11 @@ router.post('/voice', async (req: Request, res: Response) => {
 
         const twiml = new twilio.twiml.VoiceResponse();
         //start with a message while sets up
-        twiml.says({ voice: 'Polly.Joanna'}, 'One moment please.')
+        twiml.say({ voice: 'Polly.Joanna'}, 'One moment please.')
 
         const connect = twiml.connect();
         const stream = connect.stream({
-            url: `wws://${req.headers.host}/media-stream`,
+            url: `wss://${req.headers.host}/media-stream`,
         })
 
         stream.parameter({ name: 'callSid', value: callSid});
@@ -55,7 +54,7 @@ router.post('/voice', async (req: Request, res: Response) => {
         res.type('text/xml');
         res.send(twiml.toString())
     } catch (error) {
-        logger.error('Error handling voice webhool', error);
+        logger.error('Error handling voice webhook', error);
 
         //return error
         const twiml = new twilio.twiml.VoiceResponse();
@@ -69,7 +68,7 @@ router.post('/voice', async (req: Request, res: Response) => {
 
 //voice webhook
 //post /twilio/voice-simple
-//higher latancy
+//higher latency
 router.post('/voice-simple', async (req: Request, res: Response) => {
     const body = req.body as TwilioVoiceRequest;
     const callSid = body.CallSid;
@@ -113,7 +112,7 @@ router.post('/voice-simple', async (req: Request, res: Response) => {
                 twiml.say({ voice: 'Polly.Joanna'}, response.text);
                 twiml.hangup()
             } else {
-                //cuntinue conversation
+                //continue conversation
                 const gather = twiml.gather({
                     input: ['speech'],
                     speechTimeout: 'auto',
@@ -140,7 +139,7 @@ router.post('/voice-simple', async (req: Request, res: Response) => {
     }
 })
 
-//STATUS CALBACKK
+//STATUS CALLBACK
 
 //POST /twilio/status / called when call status changes (ringing, in-progress, completed)
 router.post('/status', async (req:Request, res: Response) => {
@@ -334,7 +333,7 @@ async function transferCall(callSid: string): Promise<void> {
   
 try {
   const twiml = new twilio.twiml.VoiceResponse();
-  twiml.says({ voice: 'Polly.Joana'}, 'Transfering you now. please hold');
+  twiml.say({ voice: 'Polly.Joanna'}, 'Transferring you now. Please hold.');
   twiml.dial(transferNumber);
 
   await twilioClient.calls(callSid).update({
@@ -343,7 +342,7 @@ try {
 
   logger.info('Call transferred', { callSid, to: transferNumber });
 } catch (error) {
-  logger.error('failed to transfered call', error)
+  logger.error('Failed to transfer call', error)
 }
 }
 

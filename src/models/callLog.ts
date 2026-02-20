@@ -16,11 +16,11 @@ export async function create(
 ): Promise<CallLog> {
     const result = await db.query<CallLog> (
         `INSERT INTO call_logs (call_sid, customer_id, from_number, to_number, status)
-        VALUES ($1, $2, $3, $4, in-progress)
+        VALUES ($1, $2, $3, $4, 'in-progress')
         RETURNING *`,
-    [callSid, customerId || null,fromNumber, toNumber])
-    
-    logger.info(`Call log create`, {callSid})
+    [callSid, customerId || null, fromNumber, toNumber])
+
+    logger.info('Call log created', {callSid})
     return result.rows[0]
 }
 
@@ -83,14 +83,14 @@ export async function appendToTranscript(
 
     await db.query(
         `UPDATE call_logs SET
-        transcript = CIAKESCE(transcript, '') || $2,
+        transcript = COALESCE(transcript, '') || $2,
         updated_at = CURRENT_TIMESTAMP
         WHERE call_sid = $1`,
         [callSid, line]
     )
 }
 
-//mart a call as transferred
+//mark a call as transferred
 export async function markTransferred(
     callSid: string,
     reason: string
@@ -161,6 +161,24 @@ export async function findByCustomer(
        [customerId, limit]
     )
     return result.rows;
+}
+
+//find recent calls within a date range
+export async function findRecent(
+    startDate: string,
+    endDate: string,
+    limit: number = 50
+): Promise<CallLog[]> {
+    const result = await db.query<CallLog>(
+        `SELECT cl.*, c.full_name as customer_name
+        FROM call_logs cl
+        LEFT JOIN customers c ON cl.customer_id = c.id
+        WHERE cl.started_at BETWEEN $1 AND $2
+        ORDER BY cl.started_at DESC
+        LIMIT $3`,
+       [startDate, endDate, limit]
+    )
+    return result.rows
 }
 
 //find transferred calls (for review)
@@ -288,6 +306,7 @@ export async function getStats(
     linkReservation,
     findByCallSid,
     findByCustomer,
+    findRecent,
     findTransferredCalls,
     findCallsWithErrors,
     getStats,

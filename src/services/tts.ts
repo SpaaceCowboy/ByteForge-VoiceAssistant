@@ -12,7 +12,7 @@ const openai = new OpenAI({
 });
 
 const TTS_PROVIDER: TTSProvider = (process.env.TTS_PROVIDER as TTSProvider) || 'openai'
-const OPENAI_VOICE: OpenAIVoice = (process.env.OPENAI_TTS_VOICE as OpenAIVoice) || 'tts-1';
+const OPENAI_VOICE: OpenAIVoice = (process.env.OPENAI_TTS_VOICE as OpenAIVoice) || 'nova';
 const OPENAI_MODEL: OpenAITTSModel = (process.env.OPENAI_TTS_MODEL as OpenAITTSModel) || 'tts-1'
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'
@@ -48,7 +48,7 @@ export async function openaiTTS(text: string): Promise<Buffer> {
     }
 }
 
-// stream speech generation from OpenAI (for low latancy)
+// stream speech generation from OpenAI (for low latency)
 
 export async function openaiTTSStream(text: string): Promise<NodeJS.ReadableStream> {
     const cleanedText = cleanTextForSpeech(text);
@@ -94,7 +94,7 @@ export async function elevenLabsTTS(text: string): Promise<Buffer> {
             }
         )
         if (!response.ok) {
-            throw new Error(`ElevelLabs API error: ${response.status}`);
+            throw new Error(`ElevenLabs API error: ${response.status}`);
         }
 
         const arrayBuffer = await response.arrayBuffer();
@@ -168,7 +168,7 @@ export async function textToSpeechStream(text: string): Promise<NodeJS.ReadableS
 }
 
 // utility
-//split text into chunks for faster initial paybacks and return as array
+//split text into chunks for faster initial playback and return as array
 
 export function splitTextForStreaming(text: string, maxLength: number = 100): string[] {
     const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]

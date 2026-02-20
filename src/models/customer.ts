@@ -11,7 +11,7 @@ export async function findOrCreate(phone: string): Promise<Customer> {
 
     // create new customer
     const result = await db.query<Customer>(
-        'Insert into customers (phone) values ($1) returing *', [phone]
+        'INSERT INTO customers (phone) VALUES ($1) RETURNING *', [phone]
     )
 
     logger.info('New customer created', {phone})
@@ -48,7 +48,7 @@ export async function getCustomerWithHistory(
 
     //get reservations
     const reservationsResult = await db.query<Reservation>(
-        `SELECt * FROM reservations
+        `SELECT * FROM reservations
         WHERE customer_id = $1
         ORDER BY reservation_date DESC, reservation_time DESC
         LIMIT 10`,
@@ -58,11 +58,11 @@ export async function getCustomerWithHistory(
     //get recent calls
 
     const callsResult = await db.query<CallLog>(
-        `SELECt * FROM call_logs
+        `SELECT * FROM call_logs
         WHERE customer_id = $1
         ORDER BY started_at DESC
-        LIMIT 5`
-        [customer.id] 
+        LIMIT 5`,
+        [customer.id]
     )
 
     return {
@@ -75,12 +75,12 @@ export async function getCustomerWithHistory(
 //search customers by name or phone
 export async function search(query: string, limit: number = 20): Promise<Customer[]> {
     const result = await db.query<Customer>(
-        `SELECT * FROM customer
+        `SELECT * FROM customers
         WHERE phone ILIKE $1
         OR full_name ILIKE $1
         OR email ILIKE $1
         ORDER BY total_reservations DESC LIMIT $2`,
-        [`${query}$`, limit]
+        [`%${query}%`, limit]
     );
     return result.rows
 }
@@ -102,7 +102,7 @@ export async function update(
     }
 
     if (data.email !== undefined) {
-        fields.push(`full_name = $${paramIndex++}`)
+        fields.push(`email = $${paramIndex++}`)
         values.push(data.email)
     }
 
@@ -112,7 +112,7 @@ export async function update(
     }
 
     if (data.notes !== undefined) {
-        fields.push(`notes $${paramIndex++}`)
+        fields.push(`notes = $${paramIndex++}`)
         values.push(data.notes)
     }
 
@@ -158,7 +158,7 @@ export async function addNote(id: number, note: string): Promise<Customer | null
         WHEN notes IS NULL THEN $2
         ELSE NOTES || E'\n' || $2
         END,
-        update_at = CURRENT_TIMESTAMP
+        updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
         RETURNING *`,
         [id, `[${new Date().toISOString()}] ${note}`]

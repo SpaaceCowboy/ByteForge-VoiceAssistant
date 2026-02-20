@@ -27,12 +27,12 @@ const getPoolConfig = () => {
 
 const pool = new Pool({
     ...getPoolConfig(),
-    max: 20, // maximum connection poll
-    idleTimeoutMillis: 3000, //close afk connection after 30s
+    max: 20, // maximum connection pool
+    idleTimeoutMillis: 30000, //close idle connection after 30s
     connectionTimeoutMillis: 2000, // fail fast if cant connect
 });
 
-//log poll event 
+//log pool events
 
 pool.on('connect', () => {
     logger.info('Database pool: new client connected',)
@@ -55,7 +55,7 @@ export async function query<T extends QueryResultRow = QueryResultRow>(
         const result = await pool.query<T>(text, params);
         const duration = Date.now() - start;
 
-        if (duration > 100) { //high ping1
+        if (duration > 100) { //slow query threshold
             logger.warn('Slow query detected', {
                 query: text.substring(0, 100),
                 duration: `${duration}ms`,

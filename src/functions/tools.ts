@@ -1,10 +1,10 @@
-// this file defines what actions the ai can take during a cponversation
+// this file defines what actions the ai can take during a conversation
 import type { ToolDefinition, ToolContext } from "../../index";
 
 // tool definitions
 
 export const tools: ToolDefinition[] = [
-    // reservatons
+    // reservations
     {
         type: 'function',
         function: {
@@ -22,7 +22,7 @@ export const tools: ToolDefinition[] = [
                 description: 'The time for the reservation in HH:MM format (24-hour)',
               },
               party_size: {
-                type: 'string',
+                type: 'number',
                 description: 'Number of guests',
               },
             },
@@ -47,7 +47,7 @@ export const tools: ToolDefinition[] = [
                 description: 'The time in HH:MM format (24-hour)',
               },
               party_size: {
-                type: 'string',
+                type: 'number',
                 description: 'Number of guests',
               },
               special_requests: {
@@ -81,7 +81,7 @@ export const tools: ToolDefinition[] = [
               },
               new_party_size: {
                 type: 'string',
-                description: 'New number of patients (optional)',
+                description: 'New number of guests (optional)',
               },
               special_requests: {
                 type: 'string',
@@ -114,12 +114,43 @@ export const tools: ToolDefinition[] = [
         },
       },
 
+      // customer tools
+      {
+        type: 'function',
+        function: {
+          name: 'get_customer_reservations',
+          description: 'Get the current customer\'s upcoming reservations',
+          parameters: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'update_customer_name',
+          description: 'Update the customer\'s name when they provide it',
+          parameters: {
+            type: 'object',
+            properties: {
+              name: {
+                type: 'string',
+                description: 'The customer\'s full name',
+              },
+            },
+            required: ['name'],
+          },
+        },
+      },
+
       // FAQ TOOL
       {
         type: 'function',
         function: {
             name: 'answer_faq',
-            description: 'Look up to answer to a frequently asked questions about the clinic (hours, location, etc.',
+            description: 'Look up the answer to a frequently asked question about the restaurant (hours, location, etc.)',
             parameters: {
                 type: 'object',
                     properties: {

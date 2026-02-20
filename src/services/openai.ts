@@ -15,7 +15,7 @@ const openai = new OpenAI({
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o'
 
-// chatt completion
+// chat completion
 // handles calling function
 
 export async function chat(
@@ -147,7 +147,7 @@ export async function chat(
             messages: [
                 {
                     role: 'system',
-                    content: 'Summarize this phone call transcript in 2-3 sentences. focuse on the main topic and outcome',
+                    content: 'Summarize this phone call transcript in 2-3 sentences. Focus on the main topic and outcome.',
                 },
                 {
                     role: 'user',
@@ -178,7 +178,7 @@ export async function chat(
                     - new_reservation: Customer wants to make a new booking
                     - modify_reservation: Customer wants to change an existing booking
                     - cancel_reservation: Customer wants to cancel a booking
-                    - inquiry: Customer asking about clinic details
+                    - inquiry: Customer asking about restaurant details
                     - faq: General questions about hours, services, etc.
                     - complaint: Customer has a complaint
                     - other: Doesn't fit other categories

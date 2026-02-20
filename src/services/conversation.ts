@@ -1,4 +1,4 @@
-//manages the flow of , function execution, and cordinates between all other serviices.
+//manages the conversation flow, function execution, and coordinates between all other services.
 
 import { customerModel, callLogModel, faqModel, reservationModel } from '@/models';
 import openaiService from './openai';
@@ -17,9 +17,7 @@ import type {
   ConversationResponse,
   GreetingResponse,
   FunctionExecutionResult,
-} from '../../index.ts';
-import { open } from 'fs';
-import openai from './openai';
+} from '../../index';
 
 
 
@@ -31,7 +29,7 @@ export async function initializeConversation(
     fromNumber: string,
     toNumber: string
 ): Promise<Session> {
-    logger.call(callSid, 'info', 'Initializing conversatiin', {from: fromNumber});
+    logger.call(callSid, 'info', 'Initializing conversation', {from: fromNumber});
 
     //find or create the customer
     const customer = await customerModel.findOrCreate(fromNumber);
@@ -39,7 +37,7 @@ export async function initializeConversation(
     //get reservation
     const upcomingReservations = await reservationModel.findUpcomingByCustomer(customer.id);
 
-    //call log entery
+    //call log entry
     await callLogModel.create(callSid, fromNumber, toNumber, customer.id)
 
     //initialize session state
@@ -81,7 +79,7 @@ export async function generateGreeting(callSid: string): Promise<GreetingRespons
     throw new Error(`Session not found: ${callSid}`);
   }
 
-  const businessName = process.env.BUSINESS_NAME || 'our clinic';
+  const businessName = process.env.BUSINESS_NAME || 'our restaurant';
   const customer = session.customer;
   const reservations = session.upcomingReservations;
 
@@ -158,13 +156,13 @@ export async function processInput(
 
   // build context for OpenAI
   const context: ToolContext = {
-    businessName: process.env.BUISINESS_NAME || 'our clinic',
+    businessName: process.env.BUSINESS_NAME || 'our restaurant',
     customerPhone: session.customer?.phone || 'unknown',
     customerName: session.customer?.full_name || null,
     reservationCount: session.customer?.total_reservations || 0,
     currentDate: getCurrentDate(),
-    openingHour: process.env.BUISINESS_OPENING_HOUR || '08:00',
-    closingHour: process.env.BUISINESS_CLOSING_HOUR || '16:00',
+    openingHour: process.env.BUSINESS_OPENING_HOUR || '08:00',
+    closingHour: process.env.BUSINESS_CLOSING_HOUR || '16:00',
   };
 
   // call openai
@@ -253,10 +251,10 @@ async function executeFunctionCall(
     case 'modify_reservation':
       return handleModifyReservation(args);
     
-    case 'cancle_reservation':
+    case 'cancel_reservation':
       return handleCancelReservation(args);
 
-    case 'get_customer_name':
+    case 'get_customer_reservations':
       return handleGetReservations(session);
 
     case 'update_customer_name':
@@ -317,7 +315,7 @@ async function handleCreateReservation(
   const date = String(args.date);
   const time = String(args.time);
   const partySize = parseInt(String(args.party_size));
-  const specialRequests = args.specialRequests? String(args.special_requests) : undefined;
+  const specialRequests = args.special_requests ? String(args.special_requests) : undefined;
 
   try {
     // create the reservation
@@ -503,7 +501,7 @@ async function handleEndCall(
   callSid: string,
   session: Session
 ): Promise<FunctionExecutionResult> {
-  // generate summarty analysis
+  // generate summary analysis
   const refreshedSession = await redis.getSession(callSid);
   const transcript = refreshedSession?.messageHistory
   .map(m => `[${m.role}]: ${m.content}`)
@@ -543,7 +541,7 @@ export async function handleCallEnded(
   callSid: string,
   data: { status: string; duration: number}
 ): Promise<void> {
-  logger.call(callSid, 'info', 'calle ended', data)
+  logger.call(callSid, 'info', 'Call ended', data)
 
   //update call log
   const session = await redis.getSession(callSid)

@@ -65,7 +65,7 @@ export async function getSession(callSid: string): Promise<Session | null> {
     }
 }
 
-// update diffrent session fields 
+// update different session fields
 export async function updateSession(
     callSid: string,
     updates: Partial<Session>
@@ -110,7 +110,7 @@ export async function updateSession(
     return updatedSession;
   }
 
-  // update collected
+  // update collected data
   
   export async function updateCollectedData(
     callSid: string,
@@ -148,7 +148,7 @@ export async function updateSession(
     await setSession(callSid, session);
   }
 
-  // delet a session
+  // delete a session
   export async function deleteSession(callSid: string): Promise<void> {
     const key = `${SESSION_PREFIX}${callSid}`;
     await client.del(key);
