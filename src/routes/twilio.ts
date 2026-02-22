@@ -16,7 +16,9 @@ import type {
     DeepgramController
 } from '../../types/index'
 import type { Server } from 'http'
+import { validateTwilioWebhook } from '../middleware/twilioAuth';
 const router = Router()
+router.use(validateTwilioWebhook);
 
 //twilio client for outbound actions (lazy-initialized to avoid crash at import time)
 let _twilioClient: ReturnType<typeof twilio> | null = null;
