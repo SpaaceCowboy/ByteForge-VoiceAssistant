@@ -11,14 +11,14 @@ import database from './config/database';
 import redis from './config/redis';
 import logger from './utils/logger';
 
-//variables
+// Required environment variables
 const requiredEnvVars = [
     'TWILIO_ACCOUNT_SID',
     'TWILIO_AUTH_TOKEN',
     'DEEPGRAM_API_KEY',
     'OPENAI_API_KEY',
   ];
-  
+
   for (const envVar of requiredEnvVars) {
     if (!process.env[envVar]) {
       logger.error(`Missing required environment variable: ${envVar}`);
@@ -34,38 +34,38 @@ const requiredEnvVars = [
     );
     process.exit(1);
   }
-// app setup
+
+// App setup
 
 const app: Express = express()
 const PORT = parseInt(process.env.PORT || '3000')
 
-//middleware
+// Middleware
 app.use(helmet(
-    { contentSecurityPolicy: false,} //twilo bug mikhore vaghti on e xddd
+    { contentSecurityPolicy: false }
 ))
 
-// CORS 
+// CORS
 app.use(cors({
     origin: process.env.CORS_ORIGIN || '*',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
 }))
 
-//request logg
-
+// Request logging
 app.use(morgan('combined', {
     stream: {
         write: (message: string) => logger.info(message.trim()),
     }
 }))
 
-//body parsing
+// Body parsing
 app.use(express.urlencoded({ extended: true}));
 app.use(express.json())
 
-//rate limiting for api routes
+// Rate limiting for API routes
 const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, //15min
-    max: 100, //100 req per window
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // 100 requests per window
     message: { error: 'Too many requests, please try again later'},
     standardHeaders: true,
     legacyHeaders: false,
@@ -74,12 +74,12 @@ const apiLimiter = rateLimit({
 
 app.use('/api', apiLimiter)
 
-//routes
+// Routes
 app.use('/twilio', twilioRoutes);
 app.use('/api', apiRoutes);
 app.get('/', (req: Request, res: Response) => {
     res.json( {
-        name: 'AI Voice Assistant',
+        name: 'SpineWell Clinic - AI Voice Assistant',
         status: 'running',
         version: '1.0.0',
         endpoints: {
@@ -90,8 +90,8 @@ app.get('/', (req: Request, res: Response) => {
         },
         api: {
             health: 'GET /api/health',
-            reservations: 'GET /api/reservations',
-            customers: 'GET /api/customers/search',
+            appointments: 'GET /api/appointments',
+            patients: 'GET /api/patients/search',
             calls: 'GET /api/calls',
             analytics: 'GET /api/analytics/*',
             faqs: 'GET /api/faqs',
@@ -105,41 +105,41 @@ app.use((req: Request, res: Response) => {
     res.status(404).json({ error: 'Not found'})
 })
 
-// error handler 
+// Error handler
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
     logger.error('Unhandled error', err);
 
     res.status(500).json({
         error: process.env.NODE_ENV === 'production'
-        ? 'internal server error'
+        ? 'Internal server error'
         : err.message,
     })
 })
 
-//HTTP server and websocket
+// HTTP server and WebSocket
 
 const server: Server = createServer(app);
 
 setupMediaStreamWebSocket(server);
 
-//startup
+// Startup
 
 async function startServer(): Promise<void> {
     try {
-        logger.info('connecting to database....');
+        logger.info('Connecting to database...');
         const dbConnected = await database.testConnection();
         if (!dbConnected) {
             throw new Error('Database connection failed');
         }
 
-        logger.info('connecting to redis...');
+        logger.info('Connecting to Redis...');
         await redis.connect();
 
         server.listen(PORT, () => {
             logger.info('='.repeat(50));
-            logger.info('AI Voice Assistant Server Started');
+            logger.info('SpineWell Clinic - AI Voice Assistant Started');
             logger.info('='.repeat(50));
-            logger.info(`Environment ${process.env.NODE_ENV || 'development'}`);
+            logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
             logger.info(`Port: ${PORT}`);
             logger.info(`TTS Provider: ${process.env.TTS_PROVIDER || 'openai'}`);
             logger.info(`OpenAI Model: ${process.env.OPENAI_MODEL || 'gpt-4o'}`);
@@ -159,18 +159,18 @@ async function startServer(): Promise<void> {
     }
 }
 
-//graceful shutdiwn
+// Graceful shutdown
 async function shutdown(signal: string): Promise<void> {
-    logger.info(`${signal} received. starting graceful shutdown...`);
+    logger.info(`${signal} received. Starting graceful shutdown...`);
 
-    //time out for shutdown
+    // Timeout for shutdown
     const forceShutDownTimeout = setTimeout(() => {
         logger.error('Forceful shutdown due to timeout');
         process.exit(1);
     }, 10000);
 
     try {
-        //stop accepting new connection
+        // Stop accepting new connections
         server.close(() => {
             logger.info('HTTP server closed');
         })

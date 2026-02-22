@@ -1,15 +1,16 @@
-//manages the flow of , function execution, and cordinates between all other serviices.
+// Manages the conversation flow, function execution, and coordinates between all other services.
+// SpineWell Clinic - AI Voice Assistant
 
-import { customerModel, callLogModel, faqModel, reservationModel } from '../models';
+import { patientModel, callLogModel, faqModel, appointmentModel } from '../models';
 import openaiService from './openai';
 import ttsService from './tts';
 import redis from '../config/redis';
-import { getCurrentDate, formatTimeForDisplay, validateReservation, validatePartySize } from '../utils/helpers';
+import { getCurrentDate, formatTimeForDisplay, validateAppointment } from '../utils/helpers';
 import logger from '../utils/logger';
 import type {
   Session,
-  Customer,
-  Reservation,
+  Patient,
+  Appointment,
   Message,
   SessionState,
   CollectedData,
@@ -21,10 +22,9 @@ import type {
 
 
 
+// Initialization
 
-//initialization
-
-//initialize a new conversation session when a call starts
+// Initialize a new conversation session when a call starts
 export async function initializeConversation(
     callSid: string,
     fromNumber: string,
@@ -32,24 +32,24 @@ export async function initializeConversation(
 ): Promise<Session> {
     logger.call(callSid, 'info', 'Initializing conversation', {from: fromNumber});
 
-    //find or create the customer
-    const customer = await customerModel.findOrCreate(fromNumber);
+    // Find or create the patient
+    const patient = await patientModel.findOrCreate(fromNumber);
 
-    //get reservation
-    const upcomingReservations = await reservationModel.findUpcomingByCustomer(customer.id);
+    // Get upcoming appointments
+    const upcomingAppointments = await appointmentModel.findUpcomingByPatient(patient.id);
 
-    //call log entery
-    await callLogModel.create(callSid, fromNumber, toNumber, customer.id)
+    // Create call log entry
+    await callLogModel.create(callSid, fromNumber, toNumber, patient.id)
 
-    //initialize session state
+    // Initialize session state
     const session: Session = {
       callSid,
-      customer,
-      upcomingReservations,
+      patient,
+      upcomingAppointments,
       state: {
         currentStep: 'greeting',
         confirmationPending: false,
-        pendingReservation: null,
+        pendingAppointment: null,
         transferRequested: false,
         endRequested: false,
       },
@@ -58,21 +58,21 @@ export async function initializeConversation(
       createdAt: new Date(),
     };
 
-    // store in redis
+    // Store in Redis
     await redis.setSession(callSid, session);
 
     logger.call(callSid, 'info', 'Session initialized', {
-      customerId: customer.id,
-      hasName: !!customer.full_name,
-      upcomingReservations: upcomingReservations.length,
+      patientId: patient.id,
+      hasName: !!patient.full_name,
+      upcomingAppointments: upcomingAppointments.length,
     });
 
     return session;
 }
 
-//Greeting generation
+// Greeting generation
 
-// generate personalized greeting for the caller
+// Generate personalized greeting for the caller
 export async function generateGreeting(callSid: string): Promise<GreetingResponse> {
   const session = await redis.getSession(callSid);
 
@@ -80,33 +80,24 @@ export async function generateGreeting(callSid: string): Promise<GreetingRespons
     throw new Error(`Session not found: ${callSid}`);
   }
 
-  const businessName = process.env.BUSINESS_NAME || 'our clinic';
-  const customer = session.customer;
-  const reservations = session.upcomingReservations;
+  const businessName = process.env.BUSINESS_NAME || 'SpineWell Clinic';
+  const patient = session.patient;
+  const appointments = session.upcomingAppointments;
 
   let greeting: string;
 
-  if (customer?.full_name && reservations.length > 0) {
-    // Returning customer with upcoming reservation
-    const nextRes = reservations[0];
-    greeting = `Hello ${customer.full_name}! 
-    Thank you for calling ${businessName}. 
-    I see you have a reservation coming up on 
-    ${formatDateForSpeech(nextRes.reservation_date)} at
-     ${formatTimeForDisplay(nextRes.reservation_time)}. 
-    How can I help you today?`;
-  } else if (customer?.full_name) {
-    // Returning customer without reservation
-    greeting = `Hello ${customer.full_name}! 
-    Thank you for calling ${businessName}. How can I help you today?`;
+  if (patient?.full_name && appointments.length > 0) {
+    // Returning patient with upcoming appointment
+    const nextAppt = appointments[0];
+    greeting = `Hello ${patient.full_name}! Thank you for calling ${businessName}. I see you have an appointment coming up on ${formatDateForSpeech(nextAppt.appointment_date)} at ${formatTimeForDisplay(nextAppt.appointment_time)}. How can I help you today?`;
+  } else if (patient?.full_name) {
+    // Returning patient without appointment
+    greeting = `Hello ${patient.full_name}! Thank you for calling ${businessName}. How can I help you today?`;
   } else {
-    // New customer
-    greeting = `Thank you for calling ${businessName}
-    ! I'm your AI assistant and I 
-    can help you make a reservation or answer questions about our restaurant.
-     How can I help you today?`;
+    // New patient
+    greeting = `Thank you for calling ${businessName}! I'm your AI assistant and I can help you schedule an appointment or answer questions about our clinic and services. How can I help you today?`;
   }
-  
+
   // Generate audio
   let audio: Buffer | undefined;
   try {
@@ -114,75 +105,75 @@ export async function generateGreeting(callSid: string): Promise<GreetingRespons
   } catch (error) {
     logger.call(callSid, 'error', 'Failed to generate greeting audio', error);
   }
-  
+
   // Add greeting to message history
   await redis.addMessage(callSid, {
     role: 'assistant',
     content: greeting,
     timestamp: new Date(),
   });
-  
+
   // Update session state
   await redis.updateSessionState(callSid, { currentStep: 'listening' });
-  
+
   return { text: greeting, audio };
 }
 
-//process user input and generate a response
+// Process user input and generate a response
 export async function processInput(
   callSid: string,
   userInput: string,
 ): Promise<ConversationResponse> {
   const startTime = Date.now();
-  logger.call(callSid, 'info', 'processing input', {input: userInput});
+  logger.call(callSid, 'info', 'Processing input', {input: userInput});
 
-  //get session
+  // Get session
   const session = await redis.getSession(callSid);
   if (!session) {
     throw new Error(`Session not found: ${callSid}`);
   }
 
-  //add user message to history
+  // Add user message to history
   await redis.addMessage(callSid, {
     role: 'user',
     content: userInput,
     timestamp: new Date(),
   })
 
-  // refresh session after adding message
+  // Refresh session after adding message
   const updatedSession = await redis.getSession(callSid);
   if (!updatedSession) {
     throw new Error('Session lost during processing');
   }
 
-  // build context for OpenAI
+  // Build context for OpenAI
   const context: ToolContext = {
-    businessName: process.env.BUSINESS_NAME || 'our clinic',
-    customerPhone: session.customer?.phone || 'unknown',
-    customerName: session.customer?.full_name || null,
-    reservationCount: session.customer?.total_reservations || 0,
+    businessName: process.env.BUSINESS_NAME || 'SpineWell Clinic',
+    patientPhone: session.patient?.phone || 'unknown',
+    patientName: session.patient?.full_name || null,
+    appointmentCount: session.patient?.total_appointments || 0,
     currentDate: getCurrentDate(),
     openingHour: process.env.BUSINESS_OPENING_HOUR || '08:00',
-    closingHour: process.env.BUSINESS_CLOSING_HOUR || '16:00',
+    closingHour: process.env.BUSINESS_CLOSING_HOUR || '17:00',
   };
 
-  // call openai
+  // Call OpenAI
   const response = await openaiService.chat(updatedSession.messageHistory, context);
 
   let responseText = response.content || '';
   let shouldEnd = false;
   let shouldTransfer = false;
-  let transferReason:  string | undefined;
+  let transferReason: string | undefined;
 
-  // handle function call if present
+  // Handle function call if present
   if (response.functionCall) {
     const { name, arguments: args, id} = response.functionCall;
     logger.call(callSid, 'info', 'Function call', {name, args});
 
-    //execute the function 
+    // Execute the function
     const result = await executeFunctionCall(callSid, name, args);
 
-    // get natural response after function execution
+    // Get natural response after function execution
     responseText = await openaiService.continueAfterFunctionCall(
       updatedSession.messageHistory,
       name,
@@ -191,29 +182,29 @@ export async function processInput(
       context
     );
 
-    // check for end/transfer flags
+    // Check for end/transfer flags
     shouldEnd = result.shouldEnd || false;
     shouldTransfer = result.shouldTransfer || false;
     transferReason = result.transferReason;
   }
 
-  // generate TTS audio 
+  // Generate TTS audio
   let audio: Buffer | undefined;
   if (responseText) {
-    try { 
+    try {
       audio = await ttsService.textToSpeech(responseText);
     } catch (error) {
       logger.call(callSid, 'error', 'TTS generation failed', error);
     }
 
-    //add response to history
+    // Add response to history
     await redis.addMessage(callSid, {
       role: 'assistant',
       content: responseText,
       timestamp: new Date(),
     })
 
-    //update transcript
+    // Update transcript
     await callLogModel.appendToTranscript(callSid, 'user', userInput);
     await callLogModel.appendToTranscript(callSid, 'assistant', responseText);
   }
@@ -230,7 +221,7 @@ export async function processInput(
   }
 }
 
-// function execution
+// Function execution
 
 async function executeFunctionCall(
   callSid: string,
@@ -245,58 +236,52 @@ async function executeFunctionCall(
   switch (name) {
     case 'check_availability':
       return handleCheckAvailability(args);
-    
-    case 'create_reservation':
-      return handleCreateReservation(callSid, session, args);
-    
-    case 'modify_reservation':
-      return handleModifyReservation(args);
-    
-    case 'cancel_reservation':
-      return handleCancelReservation(args);
 
-    case 'get_customer_reservations':
-      return handleGetReservations(session);
+    case 'book_appointment':
+      return handleBookAppointment(callSid, session, args);
 
-    case 'update_customer_name':
+    case 'reschedule_appointment':
+      return handleRescheduleAppointment(args);
+
+    case 'cancel_appointment':
+      return handleCancelAppointment(args);
+
+    case 'get_patient_appointments':
+      return handleGetAppointments(session);
+
+    case 'update_patient_name':
       return handleUpdateName(session, args);
 
     case 'answer_faq':
       return handleFaq(args);
 
-    case 'transfer_to_human':
+    case 'transfer_to_staff':
       return handleTransfer(callSid, args);
 
     case 'end_call':
       return handleEndCall(callSid, session);
 
     default:
-      logger.warn('unknown function called', {name});
+      logger.warn('Unknown function called', {name});
       return {success: false, error: `Unknown function: ${name}`}
   }
 }
 
-// function handler 
+// Function handlers
 async function handleCheckAvailability(
   args: Record<string, unknown>
 ): Promise<FunctionExecutionResult> {
   const date = String(args.date);
   const time = String(args.time);
-  const partySize = parseInt(String(args.party_size));
 
-  // validate inputys
-  const validation = validateReservation(date, time);
+  // Validate inputs
+  const validation = validateAppointment(date, time);
   if (!validation.valid) {
     return {success: false, error: validation.error};
   }
 
-  const sizeValidation = validatePartySize(partySize);
-  if (!sizeValidation.valid) {
-    return { success: false, error: sizeValidation.error };
-  }
-
-  //check availability
-  const availability = await reservationModel.checkAvailability(date, time, partySize)
+  // Check availability
+  const availability = await appointmentModel.checkAvailability(date, time)
 
   return {
     success: true,
@@ -304,130 +289,126 @@ async function handleCheckAvailability(
   }
 }
 
-async function handleCreateReservation(
+async function handleBookAppointment(
   callSid: string,
   session: Session,
-  args: Record<string, unknown> 
+  args: Record<string, unknown>
 ): Promise<FunctionExecutionResult> {
-  if (!session.customer) {
-    return { success: false, error: 'Customer not found'};
+  if (!session.patient) {
+    return { success: false, error: 'Patient not found'};
   }
 
   const date = String(args.date);
   const time = String(args.time);
-  const partySize = parseInt(String(args.party_size));
-  const specialRequests = args.special_requests ? String(args.special_requests) : undefined;
-  
+  const reasonForVisit = args.reason_for_visit ? String(args.reason_for_visit) : undefined;
+  const specialInstructions = args.special_instructions ? String(args.special_instructions) : undefined;
 
   try {
-    // create the reservation
-    const reservation = await reservationModel.create({
-      customerId: session.customer.id,
+    // Create the appointment
+    const appointment = await appointmentModel.create({
+      patientId: session.patient.id,
       date,
       time,
-      partySize,
-      specialRequests,
+      reasonForVisit,
+      specialInstructions,
       source: 'phone_ai',
     });
 
-    //update customer stats
-    await customerModel.incrementReservationCount(session.customer.id);
+    // Update patient stats
+    await patientModel.incrementAppointmentCount(session.patient.id);
 
-    //link reservation to call
-    await callLogModel.linkReservation(callSid, reservation.id)
-
-    return {
-      success: true,
-      data: {
-        reservationId: reservation.id,
-        confirmationCode: reservation.confirmation_code,
-        date: reservation.reservation_date,
-        time: reservation.reservation_time,
-        partySize: reservation.party_size,
-      },
-    };
-
-  } catch (error) {
-    logger.error('Failed to create reservation', error);
-    return { success: false, error: 'Failed to create reservation'};
-  }
-}
-
-async function handleModifyReservation(
-  args: Record<string, unknown>
-):Promise<FunctionExecutionResult> {
-  const reservationId = parseInt(String(args.reservation_id));
-
-  const updates: Record<string, unknown> ={};
-  if (args.new_date) updates.date = String(args.new_date);
-  if (args.new_time) updates.time = String(args.new_time);
-  if (args.new_party_size) updates.partySize = parseInt(String(args.new_party_size));
-  if (args.special_requests) updates.specialRequests = String(args.special_requests);
-
-  try {
-    const reservation = await reservationModel.modify(reservationId, updates);
-
-    if (!reservation) {
-      return {success: false, error: 'Reservation not found'};
-    }
+    // Link appointment to call
+    await callLogModel.linkAppointment(callSid, appointment.id)
 
     return {
       success: true,
       data: {
-        reservationId: reservation.id,
-        date: reservation.reservation_date,
-        time: reservation.reservation_time,
-        partySize: reservation.party_size,
+        appointmentId: appointment.id,
+        confirmationCode: appointment.confirmation_code,
+        date: appointment.appointment_date,
+        time: appointment.appointment_time,
       },
     };
 
   } catch (error) {
-    logger.error('Failed to modify reservation', error);
-    return { success:  false, error: 'Failed to modify reservation'};
+    logger.error('Failed to book appointment', error);
+    return { success: false, error: 'Failed to book appointment'};
   }
 }
 
-async function handleCancelReservation(
+async function handleRescheduleAppointment(
   args: Record<string, unknown>
 ): Promise<FunctionExecutionResult> {
-  const reservationId = parseInt(String(args.reservation_id));
-  const reason = args.reason ? String(args.reason) : undefined;
-  
+  const appointmentId = parseInt(String(args.appointment_id));
+
+  const updates: Record<string, unknown> = {};
+  if (args.new_date) updates.date = String(args.new_date);
+  if (args.new_time) updates.time = String(args.new_time);
+  if (args.special_instructions) updates.specialInstructions = String(args.special_instructions);
+
   try {
-    const reservation = await reservationModel.cancel(reservationId, reason);
-    
-    if (!reservation) {
-      return { success: false, error: 'Reservation not found' };
+    const appointment = await appointmentModel.modify(appointmentId, updates);
+
+    if (!appointment) {
+      return {success: false, error: 'Appointment not found'};
     }
-    
+
     return {
       success: true,
-      data: { cancelled: true, reservationId },
+      data: {
+        appointmentId: appointment.id,
+        date: appointment.appointment_date,
+        time: appointment.appointment_time,
+      },
     };
-    
+
   } catch (error) {
-    logger.error('Failed to cancel reservation', error);
-    return { success: false, error: 'Failed to cancel reservation' };
+    logger.error('Failed to reschedule appointment', error);
+    return { success: false, error: 'Failed to reschedule appointment'};
   }
 }
 
-async function handleGetReservations(session: Session): Promise<FunctionExecutionResult> {
-  if (!session.customer) {
-    return { success: true, data: { reservations: [] } };
+async function handleCancelAppointment(
+  args: Record<string, unknown>
+): Promise<FunctionExecutionResult> {
+  const appointmentId = parseInt(String(args.appointment_id));
+  const reason = args.reason ? String(args.reason) : undefined;
+
+  try {
+    const appointment = await appointmentModel.cancel(appointmentId, reason);
+
+    if (!appointment) {
+      return { success: false, error: 'Appointment not found' };
+    }
+
+    return {
+      success: true,
+      data: { cancelled: true, appointmentId },
+    };
+
+  } catch (error) {
+    logger.error('Failed to cancel appointment', error);
+    return { success: false, error: 'Failed to cancel appointment' };
   }
-  
-  const reservations = await reservationModel.findUpcomingByCustomer(session.customer.id);
-  
+}
+
+async function handleGetAppointments(session: Session): Promise<FunctionExecutionResult> {
+  if (!session.patient) {
+    return { success: true, data: { appointments: [] } };
+  }
+
+  const appointments = await appointmentModel.findUpcomingByPatient(session.patient.id);
+
   return {
     success: true,
     data: {
-      reservations: reservations.map(r => ({
-        id: r.id,
-        date: r.reservation_date,
-        time: r.reservation_time,
-        partySize: r.party_size,
-        status: r.status,
-        confirmationCode: r.confirmation_code,
+      appointments: appointments.map(a => ({
+        id: a.id,
+        date: a.appointment_date,
+        time: a.appointment_time,
+        reasonForVisit: a.reason_for_visit,
+        status: a.status,
+        confirmationCode: a.confirmation_code,
       })),
     },
   };
@@ -437,18 +418,18 @@ async function handleUpdateName(
   session: Session,
   args: Record<string, unknown>
 ): Promise<FunctionExecutionResult> {
-  if (!session.customer) {
-    return { success: false, error: 'Customer not found'};
+  if (!session.patient) {
+    return { success: false, error: 'Patient not found'};
 
   }
 
   const name = String(args.name);
 
-  await customerModel.updateName(session.customer.id, name);
+  await patientModel.updateName(session.patient.id, name);
 
-  //update session
+  // Update session
   await redis.updateSession(session.callSid, {
-    customer: { ...session.customer, full_name: name},
+    patient: { ...session.patient, full_name: name},
   });
 
   return {
@@ -457,12 +438,13 @@ async function handleUpdateName(
   };
 }
 
-async function handleFaq
-(args: Record<string, unknown>): Promise<FunctionExecutionResult> {
+async function handleFaq(
+  args: Record<string, unknown>
+): Promise<FunctionExecutionResult> {
   const question = String(args.question);
-  
+
   const faq = await faqModel.findMatch(question);
-  
+
   if (!faq) {
     return {
       success: true,
@@ -472,7 +454,7 @@ async function handleFaq
       },
     };
   }
-  
+
   return {
     success: true,
     data: {
@@ -487,7 +469,7 @@ async function handleTransfer(
   args: Record<string, unknown>
 ): Promise<FunctionExecutionResult> {
   const reason = String(args.reason);
-  const notes = args.notes ? String (args.notes) : undefined;
+  const notes = args.notes ? String(args.notes) : undefined;
 
   await callLogModel.markTransferred(callSid, reason);
 
@@ -503,7 +485,7 @@ async function handleEndCall(
   callSid: string,
   session: Session
 ): Promise<FunctionExecutionResult> {
-  // generate summarty analysis
+  // Generate summary analysis
   const refreshedSession = await redis.getSession(callSid);
   const transcript = refreshedSession?.messageHistory
   .map(m => `[${m.role}]: ${m.content}`)
@@ -515,7 +497,7 @@ async function handleEndCall(
     openaiService.analyzeSentiment(transcript),
   ])
 
-  //complete the call log
+  // Complete the call log
   await callLogModel.completeCall(callSid, {
     status: 'completed',
     transcript,
@@ -525,9 +507,9 @@ async function handleEndCall(
     sentimentScore: sentiment.score,
   })
 
- //delete session
+ // Delete session
  await redis.deleteSession(callSid);
- 
+
  return {
   success: true,
   data: { ending: true},
@@ -535,17 +517,17 @@ async function handleEndCall(
  }
 }
 
-//call ended handler 
+// Call ended handler
 
-//from twilio status callback
+// From Twilio status callback
 
 export async function handleCallEnded(
   callSid: string,
   data: { status: string; duration: number}
 ): Promise<void> {
-  logger.call(callSid, 'info', 'call ended', data)
+  logger.call(callSid, 'info', 'Call ended', data)
 
-  //update call log
+  // Update call log
   const session = await redis.getSession(callSid)
 
   if (session) {
@@ -560,11 +542,11 @@ export async function handleCallEnded(
     });
   }
 
-  //clean up session
+  // Clean up session
   await redis.deleteSession(callSid)
 }
 
-// utility 
+// Utility
 function formatDateForSpeech(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', {
@@ -581,5 +563,3 @@ export default {
   processInput,
   handleCallEnded,
 };
-
-

@@ -7,24 +7,24 @@ import type {
     HourlyDistribution
 } from '../../types/index'
 
-//create a new log entry when the call starts
+// Create a new log entry when the call starts
 export async function create(
     callSid: string,
     fromNumber: string,
     toNumber: string,
-    customerId?: number
+    patientId?: number
 ): Promise<CallLog> {
     const result = await db.query<CallLog> (
-        `INSERT INTO call_logs (call_sid, customer_id, from_number, to_number, status)
+        `INSERT INTO call_logs (call_sid, patient_id, from_number, to_number, status)
         VALUES ($1, $2, $3, $4, 'in-progress')
         RETURNING *`,
-    [callSid, customerId || null,fromNumber, toNumber])
-    
+    [callSid, patientId || null, fromNumber, toNumber])
+
     logger.info(`Call log created`, {callSid})
     return result.rows[0]
 }
 
-//complete a call log with full detail
+// Complete a call log with full details
 export async function completeCall(
     callSid: string,
     data: {
@@ -35,7 +35,7 @@ export async function completeCall(
         intent?: string,
         sentiment?: string;
         sentimentScore?: number;
-        reservationId?: number;
+        appointmentId?: number;
     }
 ): Promise<CallLog | null> {
     const result = await db.query<CallLog>(
@@ -48,7 +48,7 @@ export async function completeCall(
         intent = $6,
         sentiment = $7,
         sentiment_score = $8,
-        reservation_id = $9,
+        appointment_id = $9,
         updated_at = CURRENT_TIMESTAMP
       WHERE call_sid = $1
       RETURNING *`,
@@ -61,18 +61,18 @@ export async function completeCall(
         data.intent || null,
         data.sentiment || null,
         data.sentimentScore || null,
-        data.reservationId || null
+        data.appointmentId || null
       ]
     )
 
     if (result.rows[0]) {
-        logger.info('call log complete', {callSid, status: data.status})
+        logger.info('Call log completed', {callSid, status: data.status})
     }
 
     return result.rows[0] || null
 }
 
-//append text to the transcript
+// Append text to the transcript
 
 export async function appendToTranscript(
     callSid: string,
@@ -90,7 +90,7 @@ export async function appendToTranscript(
     )
 }
 
-//mart a call as transferred
+// Mark a call as transferred
 export async function markTransferred(
     callSid: string,
     reason: string
@@ -108,7 +108,7 @@ export async function markTransferred(
     return result.rows[0] || null
 }
 
-// log errors during a call
+// Log errors during a call
 export async function logError(
     callSid: string,
     errorMessage: string
@@ -122,57 +122,57 @@ export async function logError(
     )
 }
 
-//link a reservation to a call
-export async function linkReservation(
+// Link an appointment to a call
+export async function linkAppointment(
     callSid: string,
-    reservationId: number
+    appointmentId: number
 ): Promise<void> {
     await db.query(
         `UPDATE call_logs SET
-        reservation_id = $2,
+        appointment_id = $2,
         updated_at = CURRENT_TIMESTAMP
       WHERE call_sid = $1`,
-     [callSid, reservationId]   
+     [callSid, appointmentId]
     )
-} 
+}
 
-//find call log by call SID
+// Find call log by call SID
 export async function findByCallSid(callSid: string): Promise<CallLog | null> {
     const result = await db.query<CallLog>(
-      `SELECT cl.*, c.full_name as customer_name
+      `SELECT cl.*, p.full_name as patient_name
        FROM call_logs cl
-       LEFT JOIN customers c ON cl.customer_id = c.id
+       LEFT JOIN patients p ON cl.patient_id = p.id
        WHERE cl.call_sid = $1`,
       [callSid]
     );
     return result.rows[0] || null;
   }
 
-//find calls by customer ID
-export async function findByCustomer(
-    customerId: number,
+// Find calls by patient ID
+export async function findByPatient(
+    patientId: number,
     limit: number ,
 ): Promise<CallLog[]> {
     const result = await db.query<CallLog>(
         `SELECT * FROM call_logs
-        WHERE customer_id = $1
+        WHERE patient_id = $1
         ORDER BY started_at DESC
         LIMIT $2`,
-       [customerId, limit]
+       [patientId, limit]
     )
     return result.rows;
 }
 
-//find recent calls within a date range
+// Find recent calls within a date range
 export async function findRecent(
   startDate: string,
   endDate: string,
   limit: number = 50
 ): Promise<CallLog[]> {
   const result = await db.query<CallLog>(
-      `SELECT cl.*, c.full_name as customer_name
+      `SELECT cl.*, p.full_name as patient_name
       FROM call_logs cl
-      LEFT JOIN customers c ON cl.customer_id = c.id
+      LEFT JOIN patients p ON cl.patient_id = p.id
       WHERE cl.started_at BETWEEN $1 AND $2
       ORDER BY cl.started_at DESC
       LIMIT $3`,
@@ -181,15 +181,15 @@ export async function findRecent(
   return result.rows
 }
 
-//find transferred calls (for review)
+// Find transferred calls (for review)
 export async function findTransferredCalls(
     startDate: string,
     endDate: string
 ): Promise<CallLog[]> {
     const result = await db.query<CallLog>(
-        `SELECT cl.*, c.full_name as customer_name
+        `SELECT cl.*, p.full_name as patient_name
         FROM call_logs cl
-        LEFT JOIN customers c ON cl.customer_id = c.id
+        LEFT JOIN patients p ON cl.patient_id = p.id
         WHERE cl.was_transferred = true
           AND cl.started_at BETWEEN $1 AND $2
         ORDER BY cl.started_at DESC`,
@@ -198,15 +198,15 @@ export async function findTransferredCalls(
     return result.rows
 }
 
-// find calls with errors
+// Find calls with errors
 export async function findCallsWithErrors(
     startDate: string,
     endDate: string
 ): Promise<CallLog[]> {
     const result = await db.query<CallLog>(
-        `SELECT cl.*, c.full_name as customer_name
+        `SELECT cl.*, p.full_name as patient_name
         FROM call_logs cl
-        LEFT JOIN customers c ON cl.customer_id = c.id
+        LEFT JOIN patients p ON cl.patient_id = p.id
         WHERE cl.error_message IS NOT NULL
           AND cl.started_at BETWEEN $1 AND $2
         ORDER BY cl.started_at DESC`,
@@ -215,13 +215,13 @@ export async function findCallsWithErrors(
     return result.rows
 }
 
-//get call statistics for a date range
+// Get call statistics for a date range
 export async function getStats(
     startDate: string,
     endDate: string
   ): Promise<CallStats> {
     const result = await db.query<CallStats>(
-      `SELECT 
+      `SELECT
          COUNT(*) as total_calls,
          COUNT(*) FILTER (WHERE status = 'completed') as completed_calls,
          AVG(duration_seconds) FILTER (WHERE duration_seconds IS NOT NULL) as avg_duration,
@@ -231,18 +231,18 @@ export async function getStats(
        WHERE started_at BETWEEN $1 AND $2`,
       [startDate, endDate]
     );
-    
+
     return result.rows[0];
   }
 
-  // get intent breakdown
+  // Get intent breakdown
 
   export async function getIntentBreakdown(
     startDate: string,
     endDate: string
   ): Promise<IntentBreakdown[]> {
     const result = await db.query<IntentBreakdown>(
-      `SELECT 
+      `SELECT
          intent,
          COUNT(*) as count,
          ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage
@@ -253,18 +253,18 @@ export async function getStats(
        ORDER BY count DESC`,
       [startDate, endDate]
     );
-    
+
     return result.rows;
   }
 
-  //get hourly call distribution
+  // Get hourly call distribution
 
   export async function getHourlyDistribution(
     startDate: string,
     endDate: string
   ): Promise<HourlyDistribution[]> {
     const result = await db.query<HourlyDistribution>(
-      `SELECT 
+      `SELECT
          EXTRACT(HOUR FROM started_at) as hour,
          COUNT(*) as call_count
        FROM call_logs
@@ -273,11 +273,11 @@ export async function getStats(
        ORDER BY hour`,
       [startDate, endDate]
     );
-    
+
     return result.rows;
   }
 
-  //get average sentiment by day
+  // Get average sentiment by day
   export async function getSentimentTrend(
     startDate: string,
     endDate: string
@@ -303,9 +303,9 @@ export async function getStats(
     appendToTranscript,
     markTransferred,
     logError,
-    linkReservation,
+    linkAppointment,
     findByCallSid,
-    findByCustomer,
+    findByPatient,
     findRecent,
     findTransferredCalls,
     findCallsWithErrors,

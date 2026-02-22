@@ -15,24 +15,24 @@ const openai = new OpenAI({
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o'
 
-// chatt completion
-// handles calling function
+// Chat completion
+// Handles function calling
 
 export async function chat(
     messages: Message[],
     context: ToolContext
   ): Promise<OpenAIChatResponse> {
     const startTime = Date.now();
-    
+
     try {
       // Build the messages array for OpenAI
       const systemPrompt = getSystemPrompt(context);
-      
+
       const openaiMessages: ChatCompletionMessageParam[] = [
         { role: 'system', content: systemPrompt },
         ...messages.map(msg => formatMessageForOpenAI(msg)),
       ];
-      
+
       // Make the API call
       const response = await openai.chat.completions.create({
         model: MODEL,
@@ -42,14 +42,14 @@ export async function chat(
         temperature: 0.7,    // Some creativity but not too random
         max_tokens: 500,     // Keep responses concise for voice
       });
-      
+
       const duration = Date.now() - startTime;
       logger.apiTiming('OpenAI', 'chat', duration, true);
-      
+
       // Extract the response
       const choice = response.choices[0];
       const message = choice.message;
-      
+
       // Check for function call
       let functionCall: FunctionCallResult | null = null;
       if (message.tool_calls && message.tool_calls.length > 0) {
@@ -60,13 +60,13 @@ export async function chat(
           id: toolCall.id,
         };
       }
-      
+
       return {
         content: message.content,
         functionCall,
         usage: response.usage || null,
       };
-      
+
     } catch (error) {
       const duration = Date.now() - startTime;
       logger.apiTiming('OpenAI', 'chat', duration, false);
@@ -74,7 +74,7 @@ export async function chat(
       throw error;
     }
   }
-  
+
   /**
    * Continue the conversation after a function call
    * Sends the function result back to get a natural response
@@ -87,10 +87,10 @@ export async function chat(
     context: ToolContext
   ): Promise<string> {
     const startTime = Date.now();
-    
+
     try {
       const systemPrompt = getSystemPrompt(context);
-      
+
       // Build messages including the function call and result
       const openaiMessages: ChatCompletionMessageParam[] = [
         { role: 'system', content: systemPrompt },
@@ -115,19 +115,19 @@ export async function chat(
           content: JSON.stringify(functionResult),
         },
       ];
-      
+
       const response = await openai.chat.completions.create({
         model: MODEL,
         messages: openaiMessages,
         temperature: 0.7,
         max_tokens: 500,
       });
-      
+
       const duration = Date.now() - startTime;
       logger.apiTiming('OpenAI', 'continueAfterFunctionCall', duration, true);
-      
+
       return response.choices[0].message.content || '';
-      
+
     } catch (error) {
       const duration = Date.now() - startTime;
       logger.apiTiming('OpenAI', 'continueAfterFunctionCall', duration, false);
@@ -135,19 +135,19 @@ export async function chat(
       throw error;
     }
   }
-  
-  // analysis function 
 
-  // Generate a brief summar of call
+  // Analysis functions
+
+  // Generate a brief summary of the call
 
   export async function generateCallSummary(transcript: string): Promise<string> {
     try {
         const response = await openai.chat.completions.create({
-            model: 'gpt-4o-mini', //use smaller model for cost saving
+            model: 'gpt-4o-mini', // Use smaller model for cost saving
             messages: [
                 {
                     role: 'system',
-                    content: 'Summarize this phone call transcript in 2-3 sentences.  Focus on the main topic and outcome.',
+                    content: 'Summarize this phone call transcript from a spinal care clinic in 2-3 sentences. Focus on the main topic and outcome.',
                 },
                 {
                     role: 'user',
@@ -158,14 +158,14 @@ export async function chat(
             max_tokens: 150,
         });
 
-        return response.choices[0].message.content || 'unable to generate summary'
+        return response.choices[0].message.content || 'Unable to generate summary'
     } catch (error) {
         logger.error('Failed to generate call summary', error);
-        return 'Unable to generate summary '
+        return 'Unable to generate summary'
     }
   }
 
-  // detect the primary intent of a call
+  // Detect the primary intent of a call
 
   export async function detectIntent(transcript: string): Promise<string> {
     try {
@@ -174,13 +174,14 @@ export async function chat(
             messages: [
                 {
                     role: 'system',
-                    content: `Classify the primary intent of this phone call into one of these categories:
-                    - new_reservation: Customer wants to make a new booking
-                    - modify_reservation: Customer wants to change an existing booking
-                    - cancel_reservation: Customer wants to cancel a booking
-                    - inquiry: Customer asking about restourant details
-                    - faq: General questions about hours, services, etc.
-                    - complaint: Customer has a complaint
+                    content: `Classify the primary intent of this phone call to a spinal care clinic into one of these categories:
+                    - new_appointment: Patient wants to book a new appointment
+                    - reschedule_appointment: Patient wants to change an existing appointment
+                    - cancel_appointment: Patient wants to cancel an appointment
+                    - insurance_question: Patient asking about insurance coverage
+                    - services_inquiry: Patient asking about treatments or conditions treated
+                    - faq: General questions about hours, location, etc.
+                    - complaint: Patient has a complaint
                     - other: Doesn't fit other categories
                     Respond with only the category name.`,
                 },
@@ -203,13 +204,13 @@ export async function chat(
   export async function analyzeSentiment(
     transcript: string
   ): Promise<{sentiment: string; score: number}> {
-    try{
+    try {
         const response = await openai.chat.completions.create({
             model: 'gpt-4o-mini',
             messages: [
                 {
                     role: 'system',
-                    content: `Analyze the customer's sentiment in this phone call.
+                    content: `Analyze the patient's sentiment in this phone call.
                     Respond with a JSON object containing:
                     - sentiment: "positive", "neutral", or "negative"
                     - score: a number from -1.0 (very negative) to 1.0 (very positive)
@@ -232,12 +233,12 @@ export async function chat(
             score: typeof parsed.score === 'number' ? parsed.score : 0,
         };
     } catch (error) {
-        logger.error('failed to analyze sentiment', error);
+        logger.error('Failed to analyze sentiment', error);
         return { sentiment: 'neutral', score: 0}
     }
   }
 
-  //helper function
+  // Helper function
 
   function formatMessageForOpenAI(message: Message): ChatCompletionMessageParam {
     if (message.role === 'tool') {

@@ -1,21 +1,21 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { customerModel, callLogModel, faqModel, reservationModel } from '../models';
+import { patientModel, callLogModel, faqModel, appointmentModel } from '../models';
 import { getCurrentDate, formatDate } from '../utils/helpers';
 import logger from '../utils/logger';
 import type { ApiResponse, PaginatedResponse } from '../../types/index';
 
 const router = Router()
 
-//error handler wraper
+// Error handler wrapper
 function asyncHandler(
-    fn: (req: Request, res:Response, next: NextFunction) => Promise<void> 
+    fn: (req: Request, res:Response, next: NextFunction) => Promise<void>
 ) {
     return (req: Request, res: Response, next: NextFunction) => {
         Promise.resolve(fn(req, res, next)).catch(next)
     }
 }
 
-//health check
+// Health check
 router.get('/health', (req:Request, res:Response) => {
     res.json({
         status: 'ok',
@@ -24,138 +24,140 @@ router.get('/health', (req:Request, res:Response) => {
     })
 })
 
-//reservations
-router.get('/reservations', asyncHandler(async (req: Request, res: Response) => {
+// Appointments
+router.get('/appointments', asyncHandler(async (req: Request, res: Response) => {
     const { date, status, limit = '50', offset = '0'} = req.query;
 
-    let reservations;
-    
+    let appointments;
+
     if (date && typeof date === 'string') {
-        reservations = await reservationModel.findByDate(date);
+        appointments = await appointmentModel.findByDate(date);
     } else {
-        reservations = await reservationModel.findByDate(getCurrentDate());
+        appointments = await appointmentModel.findByDate(getCurrentDate());
     }
 
-    const response: PaginatedResponse<typeof reservations[0]> = {
+    const response: PaginatedResponse<typeof appointments[0]> = {
         success: true,
-        data: reservations,
-        count: reservations.length
+        data: appointments,
+        count: appointments.length
     };
 
     res.json(response)
 }))
 
-// get a specific reservation
-router.get('/reservations/:id', asyncHandler(async (req: Request, res: Response) => {
+// Get a specific appointment
+router.get('/appointments/:id', asyncHandler(async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
-    const reservation = await reservationModel.findById(id);
+    const appointment = await appointmentModel.findById(id);
 
-    if (!reservation) {
+    if (!appointment) {
         res.status(404).json({
             success: false,
-            error: 'Reservation not found'
+            error: 'Appointment not found'
         })
         return;
     }
 
     res.json({
         success: true,
-        data: reservation,
+        data: appointment,
     })
 }))
 
-router.patch('/reservations/:id', asyncHandler(async (req: Request, res:Response) => {
+router.patch('/appointments/:id', asyncHandler(async (req: Request, res:Response) => {
     const id = parseInt(req.params.id);
     const updates = req.body;
-    
-    const reservation = await reservationModel.modify(id, {
+
+    const appointment = await appointmentModel.modify(id, {
         date: updates.date,
         time: updates.time,
-        partySize: updates.partySize,
-        specialRequests: updates.specialRequests,
+        reasonForVisit: updates.reasonForVisit,
+        specialInstructions: updates.specialInstructions,
+        providerName: updates.providerName,
+        durationMinutes: updates.durationMinutes,
         status: updates.status,
-        tableNumber: updates.tableNumber
+        treatmentRoom: updates.treatmentRoom
     })
 
-    if (!reservation) {
+    if (!appointment) {
         res.status(404).json({
             success: false,
-            error: 'Reservation not found'
+            error: 'Appointment not found'
         })
         return;
     }
 
     res.json({
         success: true,
-        data: reservation,
+        data: appointment,
     })
 }))
 
-// cancle reservation
-router.delete('/reservations/:id', asyncHandler(async (req: Request, res: Response) => {
+// Cancel appointment
+router.delete('/appointments/:id', asyncHandler(async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const { reason } = req.body;
 
-    const reservation = await reservationModel.cancel(id, reason);
+    const appointment = await appointmentModel.cancel(id, reason);
 
-    if (!reservation) {
+    if (!appointment) {
         res.status(404).json({
             success: false,
-            error: 'reservation not found'
+            error: 'Appointment not found'
         })
         return;
     }
     res.json({
         success: true,
-        data: reservation,
+        data: appointment,
     })
 }))
 
-//search customer by name or phone
-router.get('/customers/search', asyncHandler(async (req: Request, res: Response) => {
+// Search patients by name or phone
+router.get('/patients/search', asyncHandler(async (req: Request, res: Response) => {
     const {q, limit = '20'} = req.query;
 
     if (!q || typeof q !== 'string') {
         res.status(400).json({
             success: false,
-            error: 'search query required',
+            error: 'Search query required',
         })
         return;
     }
 
-    const customers = await customerModel.search(q, parseInt(limit as string))
+    const patients = await patientModel.search(q, parseInt(limit as string))
 
     res.json({
         success: true,
-        data: customers,
-        count: customers.length,
+        data: patients,
+        count: patients.length,
     })
 }))
 
-//get customer with history 
-router.get('/customers/:id', asyncHandler(async (req: Request, res: Response) => {
+// Get patient with history
+router.get('/patients/:id', asyncHandler(async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
-    const customer = await customerModel.findById(id)
+    const patient = await patientModel.findById(id)
 
-    if (!customer) {
+    if (!patient) {
         res.status(404).json({
             success: false,
-            error: 'Customer not found'
+            error: 'Patient not found'
         })
         return;
     }
 
-    const customerWithHistory = await customerModel.getCustomerWithHistory(customer.phone);
+    const patientWithHistory = await patientModel.getPatientWithHistory(patient.phone);
 
     res.json({
         success: true,
-        data: customerWithHistory
+        data: patientWithHistory
     })
 }))
 
-//CALL LOGS
+// CALL LOGS
 
-//get recent call logs
+// Get recent call logs
 router.get('/calls', asyncHandler(async (req: Request, res:Response) => {
     const { start_date, end_date, transferred, limit = '50'} = req.query;
 
@@ -177,7 +179,7 @@ router.get('/calls', asyncHandler(async (req: Request, res:Response) => {
     })
 }))
 
-// get a specific call log
+// Get a specific call log
 router.get('/calls/:callSid', asyncHandler(async (req: Request, res: Response) => {
     const callSid = req.params.callSid;
     const call = await callLogModel.findByCallSid(callSid);
@@ -196,18 +198,18 @@ router.get('/calls/:callSid', asyncHandler(async (req: Request, res: Response) =
     })
 }))
 
-//ANALYTICS
+// ANALYTICS
 
-//get overcuew statistics
+// Get overview statistics
 router.get('/analytics/overview', asyncHandler(async (req: Request, res: Response) => {
     const { start_date, end_date} = req.query;
 
     const startDate = (start_date as string) || getDateDaysAgo(30);
     const endDate = (end_date as string) || getCurrentDate();
 
-    const [callStats, reservationStats] = await Promise.all([
+    const [callStats, appointmentStats] = await Promise.all([
         callLogModel.getStats(startDate, endDate),
-        reservationModel.getStats(startDate, endDate),
+        appointmentModel.getStats(startDate, endDate),
     ])
 
     res.json({
@@ -215,12 +217,12 @@ router.get('/analytics/overview', asyncHandler(async (req: Request, res: Respons
         data: {
             period: { start: startDate, end: endDate},
             calls: callStats,
-            reservations: reservationStats,
+            appointments: appointmentStats,
         },
     })
 }))
 
-//Get intent breakdown
+// Get intent breakdown
 router.get('/analytics/intents', asyncHandler(async (req: Request, res: Response) => {
     const { start_date, end_date} = req.query;
 
@@ -235,7 +237,7 @@ router.get('/analytics/intents', asyncHandler(async (req: Request, res: Response
     });
 }))
 
-// get hourly call distribution
+// Get hourly call distribution
 
 router.get('/analytics/hourly', asyncHandler(async (req: Request, res: Response) => {
     const { start_date, end_date} = req.query;
@@ -251,9 +253,9 @@ router.get('/analytics/hourly', asyncHandler(async (req: Request, res: Response)
     })
 }))
 
-//FAQs
+// FAQs
 
-//get all faqs
+// Get all FAQs
 router.get('/faqs', asyncHandler(async (req: Request, res: Response) => {
     const { category } = req.query;
 
@@ -272,7 +274,7 @@ router.get('/faqs', asyncHandler(async (req: Request, res: Response) => {
     })
 }))
 
-//get FAQ categories
+// Get FAQ categories
 router.get('/faqs/categories', asyncHandler(async (req: Request, res: Response) => {
     const categories = await faqModel.getCategories();
 
@@ -282,10 +284,10 @@ router.get('/faqs/categories', asyncHandler(async (req: Request, res: Response) 
     })
 }))
 
-// create a new FAQ
+// Create a new FAQ
 router.post('/faqs', asyncHandler(async (req: Request, res: Response) => {
     const { questionPattern, questionVariations, answer, answerShort, category, priority } = req.body;
-    
+
     if (!questionPattern || !answer || !category) {
       res.status(400).json({
         success: false,
@@ -293,7 +295,7 @@ router.post('/faqs', asyncHandler(async (req: Request, res: Response) => {
       });
       return;
     }
-    
+
     const faq = await faqModel.create({
       questionPattern,
       questionVariations,
@@ -302,14 +304,14 @@ router.post('/faqs', asyncHandler(async (req: Request, res: Response) => {
       category,
       priority,
     });
-    
+
     res.status(201).json({
       success: true,
       data: faq,
     });
   }));
 
-  //update a faq
+  // Update a FAQ
   router.patch('/faqs/:id', asyncHandler(async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const updates = req.body;
@@ -331,15 +333,15 @@ router.post('/faqs', asyncHandler(async (req: Request, res: Response) => {
         })
         return
     }
-    
+
     res.json({
         success: true,
         data: faq,
     })
-    
+
   }))
 
-  //delete a faq
+  // Delete a FAQ
   router.delete('/faqs/:id', asyncHandler(async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
 
@@ -351,7 +353,7 @@ router.post('/faqs', asyncHandler(async (req: Request, res: Response) => {
     })
   }))
 
-  //helper function
+  // Helper function
 
   function getDateDaysAgo(days: number): string {
     const date = new Date();
@@ -359,7 +361,7 @@ router.post('/faqs', asyncHandler(async (req: Request, res: Response) => {
     return formatDate(date);
   }
 
-  // error handler
+  // Error handler
   router.use((err: Error, req: Request, res: Response, next: NextFunction) => {
     logger.error('API error', err)
 
@@ -372,4 +374,3 @@ router.post('/faqs', asyncHandler(async (req: Request, res: Response) => {
   })
 
   export default router
-  

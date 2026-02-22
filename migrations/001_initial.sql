@@ -1,41 +1,47 @@
 -- ===========================================
 -- AI VOICE ASSISTANT - DATABASE SCHEMA
+-- SpineWell Clinic - Appointment Management
 -- ===========================================
 -- Run this migration against a fresh PostgreSQL database
 -- Example: psql -U postgres -d voice_assistant -f migrations/001_initial.sql
 
 -- -------------------------------------------
--- CUSTOMERS TABLE
+-- PATIENTS TABLE
 -- -------------------------------------------
--- Stores information about callers
-CREATE TABLE IF NOT EXISTS customers (
+-- Stores information about callers/patients
+CREATE TABLE IF NOT EXISTS patients (
     id SERIAL PRIMARY KEY,
     phone VARCHAR(20) UNIQUE NOT NULL,
     full_name VARCHAR(255),
     email VARCHAR(255),
+    date_of_birth DATE,
+    insurance_provider VARCHAR(255),
+    insurance_id VARCHAR(100),
     preferred_language VARCHAR(10) DEFAULT 'en',
-    total_reservations INTEGER DEFAULT 0,
+    total_appointments INTEGER DEFAULT 0,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_customers_phone ON customers(phone);
-CREATE INDEX idx_customers_name ON customers(full_name);
+CREATE INDEX idx_patients_phone ON patients(phone);
+CREATE INDEX idx_patients_name ON patients(full_name);
 
 -- -------------------------------------------
--- RESERVATIONS TABLE
+-- APPOINTMENTS TABLE
 -- -------------------------------------------
--- Stores all reservation data
-CREATE TABLE IF NOT EXISTS reservations (
+-- Stores all appointment data
+CREATE TABLE IF NOT EXISTS appointments (
     id SERIAL PRIMARY KEY,
-    customer_id INTEGER REFERENCES customers(id) ON DELETE CASCADE,
-    reservation_date DATE NOT NULL,
-    reservation_time TIME NOT NULL,
-    party_size INTEGER NOT NULL CHECK (party_size > 0),
+    patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
+    appointment_date DATE NOT NULL,
+    appointment_time TIME NOT NULL,
+    duration_minutes INTEGER DEFAULT 30,
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'cancelled', 'completed', 'no-show')),
-    special_requests TEXT,
-    table_number VARCHAR(20),
+    reason_for_visit TEXT,
+    special_instructions TEXT,
+    provider_name VARCHAR(255),
+    treatment_room VARCHAR(20),
     source VARCHAR(20) DEFAULT 'phone_ai' CHECK (source IN ('phone_ai', 'phone_human', 'website', 'walk_in', 'other')),
     confirmation_code VARCHAR(10) UNIQUE NOT NULL,
     cancelled_at TIMESTAMP,
@@ -44,11 +50,11 @@ CREATE TABLE IF NOT EXISTS reservations (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_reservations_date ON reservations(reservation_date);
-CREATE INDEX idx_reservations_datetime ON reservations(reservation_date, reservation_time);
-CREATE INDEX idx_reservations_customer ON reservations(customer_id);
-CREATE INDEX idx_reservations_status ON reservations(status);
-CREATE INDEX idx_reservations_confirmation ON reservations(confirmation_code);
+CREATE INDEX idx_appointments_date ON appointments(appointment_date);
+CREATE INDEX idx_appointments_datetime ON appointments(appointment_date, appointment_time);
+CREATE INDEX idx_appointments_patient ON appointments(patient_id);
+CREATE INDEX idx_appointments_status ON appointments(status);
+CREATE INDEX idx_appointments_confirmation ON appointments(confirmation_code);
 
 -- -------------------------------------------
 -- CALL LOGS TABLE
@@ -57,7 +63,7 @@ CREATE INDEX idx_reservations_confirmation ON reservations(confirmation_code);
 CREATE TABLE IF NOT EXISTS call_logs (
     id SERIAL PRIMARY KEY,
     call_sid VARCHAR(50) UNIQUE NOT NULL,
-    customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL,
+    patient_id INTEGER REFERENCES patients(id) ON DELETE SET NULL,
     from_number VARCHAR(20) NOT NULL,
     to_number VARCHAR(20) NOT NULL,
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -69,7 +75,7 @@ CREATE TABLE IF NOT EXISTS call_logs (
     intent VARCHAR(50),
     sentiment VARCHAR(20),
     sentiment_score DECIMAL(3, 2),
-    reservation_id INTEGER REFERENCES reservations(id) ON DELETE SET NULL,
+    appointment_id INTEGER REFERENCES appointments(id) ON DELETE SET NULL,
     was_transferred BOOLEAN DEFAULT FALSE,
     transfer_reason TEXT,
     error_message TEXT,
@@ -78,7 +84,7 @@ CREATE TABLE IF NOT EXISTS call_logs (
 );
 
 CREATE INDEX idx_call_logs_sid ON call_logs(call_sid);
-CREATE INDEX idx_call_logs_customer ON call_logs(customer_id);
+CREATE INDEX idx_call_logs_patient ON call_logs(patient_id);
 CREATE INDEX idx_call_logs_started ON call_logs(started_at);
 CREATE INDEX idx_call_logs_intent ON call_logs(intent);
 
@@ -136,7 +142,7 @@ CREATE TABLE IF NOT EXISTS business_settings (
 -- -------------------------------------------
 -- BLOCKED TIMES TABLE
 -- -------------------------------------------
--- Dates/times when reservations are not available
+-- Dates/times when appointments are not available
 CREATE TABLE IF NOT EXISTS blocked_times (
     id SERIAL PRIMARY KEY,
     blocked_date DATE NOT NULL,
@@ -161,13 +167,13 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Apply trigger to all tables with updated_at
-CREATE TRIGGER customers_updated_at
-    BEFORE UPDATE ON customers
+CREATE TRIGGER patients_updated_at
+    BEFORE UPDATE ON patients
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at();
 
-CREATE TRIGGER reservations_updated_at
-    BEFORE UPDATE ON reservations
+CREATE TRIGGER appointments_updated_at
+    BEFORE UPDATE ON appointments
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at();
 
@@ -192,110 +198,110 @@ CREATE TRIGGER conversation_sessions_updated_at
 INSERT INTO faq_responses (question_pattern, question_variations, answer, answer_short, category, priority) VALUES
 (
     'What are your hours',
-    ARRAY['when are you open', 'what time do you open', 'what time do you close', 'hours of operation'],
-    'We are open Monday through Thursday from 11 AM to 10 PM, Friday and Saturday from 11 AM to 11 PM, and Sunday from 10 AM to 9 PM for brunch and dinner.',
-    'We are open daily from 11 AM, closing at 10 PM on weekdays and 11 PM on weekends.',
+    ARRAY['when are you open', 'what time do you open', 'what time do you close', 'hours of operation', 'office hours'],
+    'SpineWell Clinic is open Monday through Friday from 8 AM to 5 PM. We are closed on weekends and major holidays.',
+    'We are open Monday through Friday, 8 AM to 5 PM.',
     'hours',
     10
 ),
 (
     'Where are you located',
-    ARRAY['what is your address', 'how do I get there', 'location', 'directions'],
-    'We are located at 123 Main Street in downtown. We are easy to find, right next to the central park. There is street parking available as well as a parking garage two blocks away.',
-    'We are at 123 Main Street in downtown, near central park.',
+    ARRAY['what is your address', 'how do I get there', 'location', 'directions', 'where is the clinic'],
+    'SpineWell Clinic is located at 450 Spine Health Boulevard, Suite 200. We are easy to find, just off the main highway near the medical district. There is free parking available in our building lot.',
+    'We are at 450 Spine Health Boulevard, Suite 200, near the medical district.',
     'location',
     10
 ),
 (
     'Do you have parking',
-    ARRAY['where can I park', 'is there parking', 'parking available'],
-    'Yes, we have limited street parking directly in front of the restaurant. There is also a public parking garage two blocks east that offers validated parking for our guests. Just bring your ticket in and we will stamp it for you.',
-    'Yes, street parking and a garage two blocks away with validation.',
+    ARRAY['where can I park', 'is there parking', 'parking available', 'parking lot'],
+    'Yes, we have a free parking lot directly in front of our building with handicap-accessible spaces near the entrance. There is also additional street parking available.',
+    'Yes, free parking is available in our building lot.',
     'parking',
     8
 ),
 (
-    'Do you take walk-ins',
-    ARRAY['do I need a reservation', 'can I come without reservation', 'walk in'],
-    'Yes, we do accept walk-ins based on availability. However, for dinner service especially on weekends, we highly recommend making a reservation to ensure we have a table ready for you.',
-    'Yes, but reservations are recommended for dinner and weekends.',
-    'reservations',
+    'Do I need a referral',
+    ARRAY['do you need a referral', 'referral required', 'can I come without referral', 'self referral', 'do I need a doctor referral'],
+    'In most cases, you do not need a referral to schedule an appointment at SpineWell Clinic. However, some insurance plans may require a referral from your primary care physician. We recommend checking with your insurance provider beforehand.',
+    'Most patients do not need a referral, but check with your insurance to be sure.',
+    'referrals',
     9
 ),
 (
-    'What is your dress code',
-    ARRAY['what should I wear', 'is there a dress code', 'formal attire'],
-    'We have a smart casual dress code. We ask that guests avoid athletic wear, flip flops, and overly casual attire. Collared shirts for men are appreciated but not required.',
-    'Smart casual. No athletic wear or flip flops please.',
-    'dress_code',
-    7
+    'What insurance do you accept',
+    ARRAY['insurance accepted', 'do you take my insurance', 'which insurance', 'insurance plans', 'do you accept medicare', 'do you accept medicaid'],
+    'We accept most major insurance plans including Blue Cross Blue Shield, Aetna, Cigna, UnitedHealthcare, Medicare, and many others. Please call our office or provide your insurance details so we can verify your coverage before your appointment.',
+    'We accept most major insurance plans. Please verify with us before your visit.',
+    'insurance',
+    10
 ),
 (
-    'Do you have vegetarian options',
-    ARRAY['vegan options', 'plant based', 'vegetarian menu', 'dietary restrictions'],
-    'Absolutely! We have an extensive selection of vegetarian and vegan dishes. Our menu clearly marks all vegetarian options with a V symbol. We can also accommodate most dietary restrictions with advance notice.',
-    'Yes, we have many vegetarian and vegan options marked on our menu.',
-    'menu',
-    8
+    'What conditions do you treat',
+    ARRAY['what do you treat', 'spinal conditions', 'back pain', 'neck pain', 'what services', 'treatments offered', 'herniated disc', 'sciatica', 'scoliosis'],
+    'SpineWell Clinic specializes in a wide range of spinal conditions including back pain, neck pain, herniated discs, sciatica, spinal stenosis, scoliosis, degenerative disc disease, and sports-related spine injuries. We offer consultations, physical therapy, injection therapies, and surgical referrals when needed.',
+    'We treat back pain, neck pain, herniated discs, sciatica, stenosis, scoliosis, and more.',
+    'services',
+    10
 ),
 (
-    'Do you have a private dining room',
-    ARRAY['private events', 'party room', 'private party', 'large group'],
-    'Yes, we have a beautiful private dining room that can accommodate up to 40 guests. It is perfect for special occasions, business dinners, and celebrations. For private dining inquiries, I would recommend speaking with our events coordinator who can help plan your special event.',
-    'Yes, our private room holds up to 40 guests. Should I transfer you to our events team?',
-    'events',
-    6
+    'What should I bring to my first appointment',
+    ARRAY['first visit', 'what to bring', 'new patient', 'first appointment', 'prepare for visit'],
+    'For your first appointment, please bring a valid photo ID, your insurance card, a list of current medications, any relevant imaging such as X-rays or MRI results, and a referral letter if your insurance requires one. Please arrive 15 minutes early to complete new patient paperwork.',
+    'Bring your ID, insurance card, medication list, and any imaging results. Arrive 15 minutes early.',
+    'new_patient',
+    9
 ),
 (
     'What is your cancellation policy',
-    ARRAY['cancel reservation', 'cancellation fee', 'how to cancel'],
-    'We kindly ask for at least 24 hours notice for cancellations. For parties of 6 or more, we require 48 hours notice. Late cancellations or no-shows may be subject to a fee, especially for large parties or special events.',
-    '24 hours notice for most reservations, 48 hours for groups of 6 or more.',
+    ARRAY['cancel appointment', 'cancellation fee', 'how to cancel', 'reschedule appointment'],
+    'We kindly ask for at least 24 hours notice for cancellations or rescheduling. Late cancellations or no-shows may be subject to a fee. If you need to cancel or reschedule, please call us as soon as possible so we can offer that time slot to another patient.',
+    '24 hours notice required for cancellations. Late cancellations may incur a fee.',
     'policy',
     9
 );
 
 -- Insert default business settings
 INSERT INTO business_settings (key, value, description) VALUES
-('max_party_size', '20', 'Maximum party size for online reservations'),
-('max_reservations_per_slot', '10', 'Maximum reservations per 30-minute slot'),
-('advance_booking_days', '60', 'How far in advance reservations can be made'),
-('min_advance_hours', '2', 'Minimum hours before reservation time to book'),
-('greeting_message', 'Thank you for calling!', 'Default greeting message');
+('default_appointment_duration', '30', 'Default appointment duration in minutes'),
+('max_appointments_per_slot', '3', 'Maximum appointments per time slot'),
+('advance_booking_days', '90', 'How far in advance appointments can be made'),
+('min_advance_hours', '2', 'Minimum hours before appointment time to book'),
+('greeting_message', 'Thank you for calling SpineWell Clinic!', 'Default greeting message');
 
 -- -------------------------------------------
 -- HELPFUL VIEWS
 -- -------------------------------------------
 
--- Today's reservations
-CREATE OR REPLACE VIEW todays_reservations AS
-SELECT 
-    r.*,
-    c.full_name as customer_name,
-    c.phone as customer_phone
-FROM reservations r
-JOIN customers c ON r.customer_id = c.id
-WHERE r.reservation_date = CURRENT_DATE
-  AND r.status NOT IN ('cancelled')
-ORDER BY r.reservation_time;
+-- Today's appointments
+CREATE OR REPLACE VIEW todays_appointments AS
+SELECT
+    a.*,
+    p.full_name as patient_name,
+    p.phone as patient_phone
+FROM appointments a
+JOIN patients p ON a.patient_id = p.id
+WHERE a.appointment_date = CURRENT_DATE
+  AND a.status NOT IN ('cancelled')
+ORDER BY a.appointment_time;
 
 -- Daily stats view
 CREATE OR REPLACE VIEW daily_call_stats AS
-SELECT 
+SELECT
     DATE(started_at) as call_date,
     COUNT(*) as total_calls,
     COUNT(*) FILTER (WHERE status = 'completed') as completed_calls,
     AVG(duration_seconds) FILTER (WHERE duration_seconds IS NOT NULL) as avg_duration,
     COUNT(*) FILTER (WHERE was_transferred = true) as transferred_calls,
-    COUNT(*) FILTER (WHERE reservation_id IS NOT NULL) as calls_with_reservation
+    COUNT(*) FILTER (WHERE appointment_id IS NOT NULL) as calls_with_appointment
 FROM call_logs
 GROUP BY DATE(started_at)
 ORDER BY call_date DESC;
 
-COMMENT ON TABLE customers IS 'Customer information and contact details';
-COMMENT ON TABLE reservations IS 'All reservation records';
+COMMENT ON TABLE patients IS 'Patient information and contact details';
+COMMENT ON TABLE appointments IS 'All appointment records';
 COMMENT ON TABLE call_logs IS 'Phone call history and transcripts';
 COMMENT ON TABLE faq_responses IS 'Pre-defined FAQ answers for the AI';
 COMMENT ON TABLE conversation_sessions IS 'Backup storage for active conversations';
 COMMENT ON TABLE business_settings IS 'Configurable business parameters';
-COMMENT ON TABLE blocked_times IS 'Dates/times when reservations are blocked';
+COMMENT ON TABLE blocked_times IS 'Dates/times when appointments are blocked';

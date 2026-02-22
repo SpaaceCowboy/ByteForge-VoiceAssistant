@@ -1,9 +1,10 @@
-// utility for date parsing, phone number normalization
+// Utility for date parsing, phone number normalization,
 // validation and text processing.
+// SpineWell Clinic - AI Voice Assistant
 
 import {v4 as uuidv4 } from 'uuid'
 
-// date and time helper
+// Date and time helpers
 
 export function parseDate(dateStr: string): string | null {
     const input = dateStr.toLowerCase().trim();
@@ -13,15 +14,15 @@ export function parseDate(dateStr: string): string | null {
     if (input === 'today') {
         return formatDate(today)
     }
-    
-    //tomorrow
+
+    // Tomorrow
     if (input === 'tomorrow') {
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1)
         return formatDate(tomorrow)
     }
 
-    //next weekday
+    // Next weekday
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
     const nextMatch = input.match(/next\s+(\w+)/)
     if (nextMatch) {
@@ -36,7 +37,7 @@ export function parseDate(dateStr: string): string | null {
         }
     }
 
-    // this weekday
+    // This weekday
     const thisMatch = input.match(/this\s+(\w+)/);
     if (thisMatch) {
         const dayIndex = dayNames.indexOf(thisMatch[1]);
@@ -44,13 +45,13 @@ export function parseDate(dateStr: string): string | null {
             const date = new Date(today);
             const currentDay = date.getDay();
             let daysToAdd = dayIndex - currentDay;
-            if (daysToAdd <0 ) daysToAdd += 7;
-            date.setDate(date.getDate() +daysToAdd );
+            if (daysToAdd < 0) daysToAdd += 7;
+            date.setDate(date.getDate() + daysToAdd);
             return formatDate(date)
         }
     }
 
-    //in x days
+    // In x days
     const inDaysMatch = input.match(/in\s+(\d+)\s+days?/);
     if (inDaysMatch) {
         const days = parseInt(inDaysMatch[1]);
@@ -59,7 +60,7 @@ export function parseDate(dateStr: string): string | null {
         return formatDate(date);
     }
 
-    // parse standard date
+    // Parse standard date
     const parsed = new Date(dateStr);
     if (!isNaN(parsed.getTime())) {
         return formatDate(parsed)
@@ -68,7 +69,7 @@ export function parseDate(dateStr: string): string | null {
     return null;
 }
 
-// parse natural language time and hours
+// Parse natural language time and hours
 
 export function parseTime(timeStr: string): string | null {
     const input = timeStr.toLowerCase().trim();
@@ -81,20 +82,20 @@ export function parseTime(timeStr: string): string | null {
         const minutes = match[2] ? parseInt(match[2]) : 0;
         const period = match[3]?.toLowerCase();
 
-        //convert to 24hour format
+        // Convert to 24-hour format
         if (period === 'pm' && hours < 12) {
             hours += 12;
         } else if (period === 'am' && hours === 12) {
             hours = 0
         }
 
-        //validate
+        // Validate
         if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
             return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
         }
     }
 
-    //handle word times
+    // Handle word times
     const wordToNumber: Record<string, number> = {
         'noon': 12, 'midday': 12,
         'midnight': 0,
@@ -106,41 +107,41 @@ export function parseTime(timeStr: string): string | null {
     for (const [word, num] of Object.entries(wordToNumber)) {
         if (input.includes(word)) {
             let hours = num;
-            // assumes pm for clinic hours
-            if (hours >= 1 && hours <= 11 && !input.includes('am') && !input.includes('morning')) {
-                if (hours <5) hours += 12; 
+            // Assumes PM for typical clinic hours (8-5)
+            if (hours >= 1 && hours <= 4 && !input.includes('am') && !input.includes('morning')) {
+                hours += 12;
             }
             return `${hours.toString().padStart(2, '0')}:00`
         }
-    } 
+    }
     return null
 }
 
-//format date object to YYY-MM-DD string
+// Format date object to YYYY-MM-DD string
 
 export function formatDate(date: Date): string {
     return date.toISOString().split('T')[0]
 }
 
-// format a Date object to HH:MM string
+// Format a Date object to HH:MM string
 
 export function formatTime(date: Date): string {
     return date.toTimeString().substring(0, 5);
 }
 
-// get current date in YYYY-MM-DD format
+// Get current date in YYYY-MM-DD format
 
 export function getCurrentDate(): string {
     return formatDate(new Date());
 }
 
-// get current time in HH:MM format
+// Get current time in HH:MM format
 
 export function getCurrentTime(): string {
     return formatTime(new Date());
 }
 
-// check if a date is in the past
+// Check if a date is in the past
 
 export function isDateInPast(dateStr: string): boolean {
     const date = new Date(dateStr);
@@ -149,7 +150,7 @@ export function isDateInPast(dateStr: string): boolean {
     return date < today;
 }
 
-// check if a time has passed for today
+// Check if a time has passed for today
 
 export function isTimeInPast(dateStr: string, timeStr: string): boolean {
     const [hours, minutes] = timeStr.split(':').map(Number);
@@ -159,9 +160,9 @@ export function isTimeInPast(dateStr: string, timeStr: string): boolean {
 }
 
 
-// phone number helper
+// Phone number helpers
 
-// normalize a phone number to  +[country code][number]
+// Normalize a phone number to +[country code][number]
 
 export function normalizePhone(phone: string, defaultCountry: string = '1'): string | null {
     let cleaned = phone.replace(/[^\d+]/g, '')
@@ -170,12 +171,12 @@ export function normalizePhone(phone: string, defaultCountry: string = '1'): str
         return cleaned
     }
 
-    // remove leading 1 if present for US 
+    // Remove leading 1 if present for US
     if (cleaned.startsWith('1') && cleaned.length === 11) {
         cleaned = cleaned.substring(1)
     }
 
-    // validate US number length (10 digits)
+    // Validate US number length (10 digits)
     if (cleaned.length === 10) {
         return `+${defaultCountry}${cleaned}`;
     }
@@ -187,84 +188,64 @@ export function normalizePhone(phone: string, defaultCountry: string = '1'): str
     return null;
 }
 
-// format a phone number for display
+// Format a phone number for display
 
 export function formatPhoneForDisplay(phone: string): string {
     const cleaned = phone.replace(/\D/g, '');
-    
+
     // US format
     if (cleaned.length === 10) {
       return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
     }
-    
+
     if (cleaned.length === 11 && cleaned.startsWith('1')) {
       return `(${cleaned.slice(1, 4)}) ${cleaned.slice(4, 7)}-${cleaned.slice(7)}`;
     }
-    
+
     return phone;
   }
 
-  // validate party size 
+  // Validate appointment date and time
 
-  export function validatePartySize(size: number): { valid: boolean; error?: string} {
-    const maxSize = parseInt(process.env.MAX_PARTY_SIZE || '20');
-
-    if (!Number.isInteger(size)) {
-        return { valid: false, error: 'party size must be a whole number'};
-    }
-
-    if (size < 1) {
-        return { valid: false, error: 'Party size must be at least 1 '};
-    } 
-
-    if (size > maxSize) {
-        return {valid: false, error: `Party size cannot exceed ${maxSize}.For larger groups, please call to speak with a manager.`}
-    }
-
-    return { valid: true };
-  }
-
-  //validate reservation date and time
-
-  export function validateReservation(
+  export function validateAppointment(
     date: string,
     time: string
   ): {valid: boolean; error?: string} {
-    //check date format
+    // Check date format
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return { valid: false, error: 'Invalid date format' };
       }
 
-      // check time format
+      // Check time format
       if (!/^\d{2}:\d{2}$/.test(time)) {
         return { valid: false, error: 'Invalid time format' };
       }
 
-      // check if in past
+      // Check if in past
       if (isDateInPast(date)) {
-        return {valid: false, error: 'Cannot make reservations for past dates'};
+        return {valid: false, error: 'Cannot schedule appointments for past dates'};
       }
 
-      // check if today and time has passed
+      // Check if today and time has passed
       if (date === getCurrentDate() && isTimeInPast(date, time)) {
-        return {valid: false, error: 'that time has already passed today'}
+        return {valid: false, error: 'That time has already passed today'}
       }
 
-      // check buisiness hours
-      const openingHour = process.env.BUSINESS_OPENING_HOUR || '8:00';
+      // Check business hours (Mon-Fri 8AM-5PM)
+      const openingHour = process.env.BUSINESS_OPENING_HOUR || '08:00';
       const closingHour = process.env.BUSINESS_CLOSING_HOUR || '17:00';
 
       if (time < openingHour || time > closingHour) {
         return {
             valid: false,
-            error: `we're only open from ${formatTimeForDisplay(openingHour)} to ${formatTimeForDisplay(closingHour)}`
+            error: `The clinic is only open from ${formatTimeForDisplay(openingHour)} to ${formatTimeForDisplay(closingHour)}, Monday through Friday`
         }
       }
 
       return { valid: true}
   }
 
-  // format time for display (24h to 12h)
+  // Format time for display (24h to 12h)
 
   export function formatTimeForDisplay(time: string): string {
     const [hours, minutes] = time.split(':').map(Number);
@@ -275,7 +256,7 @@ export function formatPhoneForDisplay(phone: string): string {
     : `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
   }
 
-  //text processing helper
+  // Text processing helpers
 
 export function extractNumber(text: string): number | null {
     const wordToNum: Record<string, number> = {
@@ -288,23 +269,23 @@ export function extractNumber(text: string): number | null {
 
     const lower = text.toLowerCase();
 
-    // check for word numbers (four = 4)
+    // Check for word numbers (four = 4)
     for (const [word, num] of Object.entries(wordToNum)) {
         if (lower.includes(word)) {
             return num;
         }
-    } 
+    }
 
-    // check for digits
+    // Check for digits
     const digitalMatch = text.match(/\d+/);
     if (digitalMatch) {
         return parseInt(digitalMatch[0])
     }
 
     return null
-}  
+}
 
-//clean text for TTS (remove unwanted characters)
+// Clean text for TTS (remove unwanted characters)
 
 export function cleanTextForSpeech(text: string): string {
     return text
@@ -315,7 +296,7 @@ export function cleanTextForSpeech(text: string): string {
     .trim();
 }
 
-// generate a unique confirmation code
+// Generate a unique confirmation code
 
 export function generateConfirmationCode(): string {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -326,12 +307,12 @@ export function generateConfirmationCode(): string {
     return code;
 }
 
-// generate a UUID 
+// Generate a UUID
 export function generateUUID(): string {
     return uuidv4()
 }
 
-//truncate text with ellipsis
+// Truncate text with ellipsis
 
 export function truncate(text: string, maxLength: number): string {
     if (text.length <= maxLength) {
@@ -340,7 +321,7 @@ export function truncate(text: string, maxLength: number): string {
     return text.substring(0, maxLength - 3 ) + '...'
 }
 
-//capitalize first letter of each word
+// Capitalize first letter of each word
 
 export function titleCase(text: string): string {
     return text
@@ -361,8 +342,7 @@ export default {
     isTimeInPast,
     normalizePhone,
     formatPhoneForDisplay,
-    validatePartySize,
-    validateReservation,
+    validateAppointment,
     formatTimeForDisplay,
     extractNumber,
     cleanTextForSpeech,
