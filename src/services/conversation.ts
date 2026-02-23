@@ -1,20 +1,24 @@
 //manages the flow of , function execution, and cordinates between all other serviices.
 
-import { customerModel, callLogModel, faqModel, reservationModel } from '../models';
+import { patientModel, callLogModel, faqModel, appointmentModel } from '../models';
 import openaiService from './openai';
 import ttsService from './tts';
 import redis from '../config/redis';
-import { getCurrentDate, formatTimeForDisplay, validateReservation, validatePartySize } from '../utils/helpers';
+import db from '../config/database'
+import { getCurrentDate, formatTimeForDisplay, validateAppointment,  } from '../utils/helpers';
 import logger from '../utils/logger';
 import type {
   Session,
-  Customer,
-  Reservation,
+  Patient,
+  Appointment,
   Message,
   SessionState,
   CollectedData,
   ToolContext,
   ConversationResponse,
+  Doctor,
+  Department,
+  Location,
   GreetingResponse,
   FunctionExecutionResult,
 } from '../../types/index';
@@ -33,23 +37,23 @@ export async function initializeConversation(
     logger.call(callSid, 'info', 'Initializing conversation', {from: fromNumber});
 
     //find or create the customer
-    const customer = await customerModel.findOrCreate(fromNumber);
+    const patient = await patientModel.findOrCreate(fromNumber);
 
     //get reservation
-    const upcomingReservations = await reservationModel.findUpcomingByCustomer(customer.id);
+    const upcomingAppointments = await appointmentModel.findUpcomingByPatient(patient.id);
 
     //call log entery
-    await callLogModel.create(callSid, fromNumber, toNumber, customer.id)
+    await callLogModel.create(callSid, fromNumber, toNumber, patient.id)
 
     //initialize session state
     const session: Session = {
       callSid,
-      customer,
-      upcomingReservations,
+      patient,
+      upcomingAppointments,
       state: {
         currentStep: 'greeting',
         confirmationPending: false,
-        pendingReservation: null,
+        pendingAppointment: null,
         transferRequested: false,
         endRequested: false,
       },
@@ -62,9 +66,9 @@ export async function initializeConversation(
     await redis.setSession(callSid, session);
 
     logger.call(callSid, 'info', 'Session initialized', {
-      customerId: customer.id,
-      hasName: !!customer.full_name,
-      upcomingReservations: upcomingReservations.length,
+      customerId: patient.id,
+      hasName: !!patient.full_name,
+      upcomingReservations: upcomingAppointments.length,
     });
 
     return session;
@@ -80,30 +84,30 @@ export async function generateGreeting(callSid: string): Promise<GreetingRespons
     throw new Error(`Session not found: ${callSid}`);
   }
 
-  const businessName = process.env.BUSINESS_NAME || 'our clinic';
-  const customer = session.customer;
-  const reservations = session.upcomingReservations;
+  const businessName = process.env.BUSINESS_NAME || 'the NeuroSpine institute';
+  const patient = session.patient;
+  const appointments = session.upcomingAppointments;
 
   let greeting: string;
 
-  if (customer?.full_name && reservations.length > 0) {
+  if (patient?.full_name && appointments.length > 0) {
     // Returning customer with upcoming reservation
-    const nextRes = reservations[0];
-    greeting = `Hello ${customer.full_name}! 
+    const nextRes = appointments[0];
+    greeting = `Hello ${patient.full_name}! 
     Thank you for calling ${businessName}. 
-    I see you have a reservation coming up on 
-    ${formatDateForSpeech(nextRes.reservation_date)} at
-     ${formatTimeForDisplay(nextRes.reservation_time)}. 
+    I see you have a appointment coming up on 
+    ${formatDateForSpeech(nextRes.appointment_date)} at
+     ${formatTimeForDisplay(nextRes.appointment_time)}. 
     How can I help you today?`;
-  } else if (customer?.full_name) {
+  } else if (patient?.full_name) {
     // Returning customer without reservation
-    greeting = `Hello ${customer.full_name}! 
+    greeting = `Hello ${patient.full_name}! 
     Thank you for calling ${businessName}. How can I help you today?`;
   } else {
     // New customer
     greeting = `Thank you for calling ${businessName}
     ! I'm your AI assistant and I 
-    can help you make a reservation or answer questions about our restaurant.
+    can help you schedile an appointment or answer questions about our services, or connect you with our staff.
      How can I help you today?`;
   }
   
@@ -156,15 +160,7 @@ export async function processInput(
   }
 
   // build context for OpenAI
-  const context: ToolContext = {
-    businessName: process.env.BUSINESS_NAME || 'our clinic',
-    customerPhone: session.customer?.phone || 'unknown',
-    customerName: session.customer?.full_name || null,
-    reservationCount: session.customer?.total_reservations || 0,
-    currentDate: getCurrentDate(),
-    openingHour: process.env.BUSINESS_OPENING_HOUR || '08:00',
-    closingHour: process.env.BUSINESS_CLOSING_HOUR || '16:00',
-  };
+  const context = await buildToolContext(session);
 
   // call openai
   const response = await openaiService.chat(updatedSession.messageHistory, context);
@@ -230,6 +226,54 @@ export async function processInput(
   }
 }
 
+//build toolcontext with clinic locations and departments from db
+async function buildToolContext(session: Session): Promise<ToolContext> {
+  let locations: string[] = [];
+  let departments: string[] = [];
+
+  try {
+    const locResult = await db.query<Location>(
+      'SELECT name FROM locations WHERE is_active = true ORDER BY id'
+    );
+    locations = locResult.rows.map((l) => l.name);
+  } catch {
+    locations = [
+      'NeuroSpine Institute - Palmdale',
+      'NeuroSpine Institute - Sherman Oaks',
+      'NeuroSpine Institute - Valencia',
+      'NeuroSpine Institute - Thousand Oaks',
+    ];
+  }
+
+  try {
+    const depResult = await db.query<Department>(
+      'SELECT name FROM departments WHERE is_active = true ORDER BY id'
+    );
+    departments = depResult.rows.map((d) => d.name);
+  } catch {
+    departments = [
+      'Neurosurgery',
+      'Neurology',
+      'Pain Management',
+      'Physical Medicine & Rehabilitation',
+      'Chiropractic Care',
+      'Urgent Care',
+    ];
+  }
+
+  return {
+    businessName: process.env.BUSINESS_NAME || 'NeuroSpine Institute',
+    patientPhone: session.patient?.phone || 'unknown',
+    patientName: session.patient?.full_name || null,
+    appointmentCount: session.patient?.total_appointments || 0,
+    currentDate: getCurrentDate(),
+    openingHour: process.env.BUSINESS_OPENING_HOUR || '08:00',
+    closingHour: process.env.BUSINESS_CLOSING_HOUR || '17:00',
+    locations,
+    departments,
+  };
+}
+
 // function execution
 
 async function executeFunctionCall(
@@ -245,34 +289,37 @@ async function executeFunctionCall(
   switch (name) {
     case 'check_availability':
       return handleCheckAvailability(args);
-    
-    case 'create_reservation':
-      return handleCreateReservation(callSid, session, args);
-    
-    case 'modify_reservation':
-      return handleModifyReservation(args);
-    
-    case 'cancel_reservation':
-      return handleCancelReservation(args);
 
-    case 'get_customer_reservations':
-      return handleGetReservations(session);
+    case 'book_appointment':
+      return handleBookAppointment(callSid, session, args);
 
-    case 'update_customer_name':
-      return handleUpdateName(session, args);
+    case 'reschedule_appointment':
+      return handleRescheduleAppointment(args);
+
+    case 'cancel_appointment':
+      return handleCancelAppointment(args);
+
+    case 'get_patient_appointments':
+      return handleGetAppointments(session);
+
+    case 'update_patient_info':
+      return handleUpdatePatientInfo(session, args);
+
+    case 'get_department_info':
+      return handleGetDepartmentInfo(args);
 
     case 'answer_faq':
       return handleFaq(args);
 
-    case 'transfer_to_human':
+    case 'transfer_to_staff':
       return handleTransfer(callSid, args);
 
     case 'end_call':
       return handleEndCall(callSid, session);
 
     default:
-      logger.warn('unknown function called', {name});
-      return {success: false, error: `Unknown function: ${name}`}
+      logger.warn('Unknown function called', { name });
+      return { success: false, error: `Unknown function: ${name}` };
   }
 }
 
@@ -285,18 +332,25 @@ async function handleCheckAvailability(
   const partySize = parseInt(String(args.party_size));
 
   // validate inputys
-  const validation = validateReservation(date, time);
+  const validation = validateAppointment(date, time);
   if (!validation.valid) {
     return {success: false, error: validation.error};
   }
 
-  const sizeValidation = validatePartySize(partySize);
-  if (!sizeValidation.valid) {
-    return { success: false, error: sizeValidation.error };
-  }
+let doctorId: number | undefined;
+if (args.doctor_name) {
+  const doctor = await findDoctorByName(String(args.doctor_name));
+  if (doctor) doctorId = doctor.id
+}
+
+let locationId: number | undefined;
+if (args.location) {
+  const location = await findLocationByName(String(args.location));
+  if (location) locationId = location.id
+}
 
   //check availability
-  const availability = await reservationModel.checkAvailability(date, time, partySize)
+  const availability = await appointmentModel.checkAvailability(date, time, doctorId, locationId)
 
   return {
     success: true,
@@ -304,157 +358,295 @@ async function handleCheckAvailability(
   }
 }
 
-async function handleCreateReservation(
+async function handleBookAppointment(
   callSid: string,
   session: Session,
   args: Record<string, unknown> 
 ): Promise<FunctionExecutionResult> {
-  if (!session.customer) {
-    return { success: false, error: 'Customer not found'};
+  if (!session.patient) {
+    return { success: false, error: 'patient not found'};
   }
 
   const date = String(args.date);
   const time = String(args.time);
-  const partySize = parseInt(String(args.party_size));
-  const specialRequests = args.special_requests ? String(args.special_requests) : undefined;
-  
+
+  let doctorId: number | undefined;
+  let doctorName: string | undefined;
+  if (args.doctor_name) {
+    const doctor = await findDoctorByName(String(args.doctor_name));
+    if (doctor) {
+      doctorId = doctor.id;
+      doctorName = doctor.full_name
+    }
+  }
+
+  //resolve department
+  let departmentId: number | undefined;
+  let departmentName: string | undefined;
+  if (args.department) {
+    const dept = await findDepartmentByName(String(args.department));
+    if (dept) {
+      departmentId = dept.id;
+      departmentName = dept.name
+    }
+  }
+
+  //resolve location
+  let locationId: number | undefined;
+  let locationName: string | undefined;
+  if (args.location) {
+    const location = await findLocationByName(String(args.location));
+    if (location) {
+      locationId = location.id;
+      locationName = location.name;
+    }
+  }
 
   try {
-    // create the reservation
-    const reservation = await reservationModel.create({
-      customerId: session.customer.id,
+    const appointment = await appointmentModel.create({
+      patientId: session.patient.id,
+      doctorId,
+      departmentId,
+      locationId,
       date,
       time,
-      partySize,
-      specialRequests,
+      appointmentType: (args.appointment_type as string) || 'consultation',
+      reasonForVisit: args.reason_for_visit ? String(args.reason_for_visit) : undefined,
+      specialInstructions: args.special_instructions
+        ? String(args.special_instructions)
+        : undefined,
+      isNewPatient: args.is_new_patient === 'true',
       source: 'phone_ai',
     });
 
-    //update customer stats
-    await customerModel.incrementReservationCount(session.customer.id);
+    // Update patient stats
+    await patientModel.incrementAppointmentCount(session.patient.id);
 
-    //link reservation to call
-    await callLogModel.linkReservation(callSid, reservation.id)
-
-    return {
-      success: true,
-      data: {
-        reservationId: reservation.id,
-        confirmationCode: reservation.confirmation_code,
-        date: reservation.reservation_date,
-        time: reservation.reservation_time,
-        partySize: reservation.party_size,
-      },
-    };
-
-  } catch (error) {
-    logger.error('Failed to create reservation', error);
-    return { success: false, error: 'Failed to create reservation'};
-  }
-}
-
-async function handleModifyReservation(
-  args: Record<string, unknown>
-):Promise<FunctionExecutionResult> {
-  const reservationId = parseInt(String(args.reservation_id));
-
-  const updates: Record<string, unknown> ={};
-  if (args.new_date) updates.date = String(args.new_date);
-  if (args.new_time) updates.time = String(args.new_time);
-  if (args.new_party_size) updates.partySize = parseInt(String(args.new_party_size));
-  if (args.special_requests) updates.specialRequests = String(args.special_requests);
-
-  try {
-    const reservation = await reservationModel.modify(reservationId, updates);
-
-    if (!reservation) {
-      return {success: false, error: 'Reservation not found'};
-    }
+    // Link appointment to call
+    await callLogModel.linkAppointment(callSid, appointment.id);
 
     return {
       success: true,
       data: {
-        reservationId: reservation.id,
-        date: reservation.reservation_date,
-        time: reservation.reservation_time,
-        partySize: reservation.party_size,
+        appointmentId: appointment.id,
+        confirmationCode: appointment.confirmation_code,
+        date: appointment.appointment_date,
+        time: appointment.appointment_time,
+        doctorName: doctorName || 'To be assigned',
+        departmentName: departmentName || undefined,
+        locationName: locationName || undefined,
+        appointmentType: appointment.appointment_type,
       },
     };
-
   } catch (error) {
-    logger.error('Failed to modify reservation', error);
-    return { success:  false, error: 'Failed to modify reservation'};
+    logger.error('Failed to book appointment', error);
+    return { success: false, error: 'Failed to book appointment' };
   }
 }
 
-async function handleCancelReservation(
+async function handleRescheduleAppointment(
   args: Record<string, unknown>
 ): Promise<FunctionExecutionResult> {
-  const reservationId = parseInt(String(args.reservation_id));
-  const reason = args.reason ? String(args.reason) : undefined;
-  
+  const appointmentId = parseInt(String(args.appointment_id));
+
+  // Try to find by confirmation code if not a number
+  let appt: Appointment | null = null;
+  if (isNaN(appointmentId)) {
+    appt = await appointmentModel.findByConfirmationCode(String(args.appointment_id));
+  } else {
+    appt = await appointmentModel.findById(appointmentId);
+  }
+
+  if (!appt) {
+    return { success: false, error: 'Appointment not found' };
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (args.new_date) updates.date = String(args.new_date);
+  if (args.new_time) updates.time = String(args.new_time);
+
+  if (args.new_doctor_name) {
+    const doctor = await findDoctorByName(String(args.new_doctor_name));
+    if (doctor) updates.doctorId = doctor.id;
+  }
+
+  if (args.new_location) {
+    const location = await findLocationByName(String(args.new_location));
+    if (location) updates.locationId = location.id;
+  }
+
   try {
-    const reservation = await reservationModel.cancel(reservationId, reason);
-    
-    if (!reservation) {
-      return { success: false, error: 'Reservation not found' };
+    const updated = await appointmentModel.modify(appt.id, updates);
+
+    if (!updated) {
+      return { success: false, error: 'Appointment not found' };
     }
-    
+
     return {
       success: true,
-      data: { cancelled: true, reservationId },
+      data: {
+        appointmentId: updated.id,
+        confirmationCode: updated.confirmation_code,
+        date: updated.appointment_date,
+        time: updated.appointment_time,
+      },
     };
-    
   } catch (error) {
-    logger.error('Failed to cancel reservation', error);
-    return { success: false, error: 'Failed to cancel reservation' };
+    logger.error('Failed to reschedule appointment', error);
+    return { success: false, error: 'Failed to reschedule appointment' };
   }
 }
 
-async function handleGetReservations(session: Session): Promise<FunctionExecutionResult> {
-  if (!session.customer) {
-    return { success: true, data: { reservations: [] } };
+async function handleCancelAppointment(
+  args: Record<string, unknown>
+): Promise<FunctionExecutionResult> {
+  const appointmentId = parseInt(String(args.appointment_id));
+  const reason = args.reason ? String(args.reason) : undefined;
+
+  // Try confirmation code if not a number
+  let appt: Appointment | null = null;
+  if (isNaN(appointmentId)) {
+    appt = await appointmentModel.findByConfirmationCode(String(args.appointment_id));
+  } else {
+    appt = await appointmentModel.findById(appointmentId);
   }
-  
-  const reservations = await reservationModel.findUpcomingByCustomer(session.customer.id);
-  
+
+  if (!appt) {
+    return { success: false, error: 'Appointment not found' };
+  }
+
+  try {
+    const cancelled = await appointmentModel.cancel(appt.id, reason);
+
+    if (!cancelled) {
+      return { success: false, error: 'Appointment not found' };
+    }
+
+    return {
+      success: true,
+      data: { cancelled: true, appointmentId: appt.id },
+    };
+  } catch (error) {
+    logger.error('Failed to cancel appointment', error);
+    return { success: false, error: 'Failed to cancel appointment' };
+  }
+}
+
+async function handleGetAppointments(
+  session: Session
+): Promise<FunctionExecutionResult> {
+  if (!session.patient) {
+    return { success: true, data: { appointments: [] } };
+  }
+
+  const appointments = await appointmentModel.findUpcomingByPatient(session.patient.id);
+
   return {
     success: true,
     data: {
-      reservations: reservations.map(r => ({
-        id: r.id,
-        date: r.reservation_date,
-        time: r.reservation_time,
-        partySize: r.party_size,
-        status: r.status,
-        confirmationCode: r.confirmation_code,
+      appointments: appointments.map((a) => ({
+        id: a.id,
+        date: a.appointment_date,
+        time: a.appointment_time,
+        doctorName: a.doctor_name || 'To be assigned',
+        departmentName: a.department_name,
+        locationName: a.location_name,
+        appointmentType: a.appointment_type,
+        status: a.status,
+        confirmationCode: a.confirmation_code,
       })),
     },
   };
 }
 
-async function handleUpdateName(
+async function handleUpdatePatientInfo(
   session: Session,
   args: Record<string, unknown>
 ): Promise<FunctionExecutionResult> {
-  if (!session.customer) {
-    return { success: false, error: 'Customer not found'};
-
+  if (!session.patient) {
+    return { success: false, error: 'Patient not found' };
   }
 
-  const name = String(args.name);
+  const updateData: Record<string, unknown> = {};
 
-  await customerModel.updateName(session.customer.id, name);
+  if (args.name) {
+    updateData.full_name = String(args.name);
+  }
+  if (args.insurance_provider) {
+    updateData.insurance_provider = String(args.insurance_provider);
+  }
+  if (args.insurance_id) {
+    updateData.insurance_id = String(args.insurance_id);
+  }
+  if (args.email) {
+    updateData.email = String(args.email);
+  }
 
-  //update session
+  await patientModel.update(session.patient.id, updateData);
+
+  // Update session with new patient data
+  const updatedPatient = { ...session.patient, ...updateData };
   await redis.updateSession(session.callSid, {
-    customer: { ...session.customer, full_name: name},
+    patient: updatedPatient as Patient,
   });
 
   return {
     success: true,
-    data: { name },
+    data: { updated: Object.keys(updateData) },
   };
+}
+async function handleGetDepartmentInfo(
+  args: Record<string, unknown>
+): Promise<FunctionExecutionResult> {
+  const deptQuery = String(args.department).toLowerCase().trim();
+
+  try {
+    // Find department by name or slug
+    const deptResult = await db.query<Department>(
+      `SELECT * FROM departments
+       WHERE is_active = true
+         AND (LOWER(name) LIKE $1 OR slug LIKE $1)
+       LIMIT 1`,
+      [`%${deptQuery}%`]
+    );
+
+    if (deptResult.rows.length === 0) {
+      return {
+        success: true,
+        data: {
+          found: false,
+          message: 'Department not found. Available departments: Neurosurgery, Neurology, Pain Management, Physical Medicine & Rehabilitation, Chiropractic Care, Urgent Care.',
+        },
+      };
+    }
+
+    const dept = deptResult.rows[0];
+
+    // Get doctors in this department
+    const doctorsResult = await db.query<Doctor>(
+      `SELECT * FROM doctors
+       WHERE department_id = $1 AND is_active = true
+       ORDER BY full_name`,
+      [dept.id]
+    );
+
+    return {
+      success: true,
+      data: {
+        found: true,
+        department: dept.name,
+        description: dept.description,
+        doctors: doctorsResult.rows.map((d) => ({
+          name: `${d.full_name}${d.title ? ', ' + d.title : ''}`,
+          specialty: d.specialty,
+          acceptingNewPatients: d.is_accepting_new_patients,
+        })),
+      },
+    };
+  } catch (error) {
+    logger.error('Failed to get department info', error);
+    return { success: false, error: 'Failed to look up department information' };
+  }
 }
 
 async function handleFaq
@@ -562,6 +754,39 @@ export async function handleCallEnded(
 
   //clean up session
   await redis.deleteSession(callSid)
+}
+
+async function findDoctorByName(name: string): Promise<Doctor | null> {
+  const result = await db.query<Doctor>(
+    `SELECT * FROM doctors
+     WHERE is_active = true
+       AND LOWER(full_name) LIKE $1
+     LIMIT 1`,
+    [`%${name.toLowerCase()}%`]
+  );
+  return result.rows[0] || null;
+}
+
+async function findDepartmentByName(name: string): Promise<Department | null> {
+  const result = await db.query<Department>(
+    `SELECT * FROM departments
+     WHERE is_active = true
+       AND (LOWER(name) LIKE $1 OR slug LIKE $1)
+     LIMIT 1`,
+    [`%${name.toLowerCase()}%`]
+  );
+  return result.rows[0] || null;
+}
+
+async function findLocationByName(name: string): Promise<Location | null> {
+  const result = await db.query<Location>(
+    `SELECT * FROM locations
+     WHERE is_active = true
+       AND LOWER(name) LIKE $1
+     LIMIT 1`,
+    [`%${name.toLowerCase()}%`]
+  );
+  return result.rows[0] || null;
 }
 
 // utility 

@@ -15,7 +15,7 @@ export async function create(
     customerId?: number
 ): Promise<CallLog> {
     const result = await db.query<CallLog> (
-        `INSERT INTO call_logs (call_sid, customer_id, from_number, to_number, status)
+        `INSERT INTO call_logs (call_sid, patient_id, from_number, to_number, status)
         VALUES ($1, $2, $3, $4, 'in-progress')
         RETURNING *`,
     [callSid, customerId || null,fromNumber, toNumber])
@@ -48,7 +48,7 @@ export async function completeCall(
         intent = $6,
         sentiment = $7,
         sentiment_score = $8,
-        reservation_id = $9,
+        appointment_id = $9,
         updated_at = CURRENT_TIMESTAMP
       WHERE call_sid = $1
       RETURNING *`,
@@ -123,13 +123,13 @@ export async function logError(
 }
 
 //link a reservation to a call
-export async function linkReservation(
+export async function linkAppointment(
     callSid: string,
     reservationId: number
 ): Promise<void> {
     await db.query(
         `UPDATE call_logs SET
-        reservation_id = $2,
+        appointment_id = $2,
         updated_at = CURRENT_TIMESTAMP
       WHERE call_sid = $1`,
      [callSid, reservationId]   
@@ -141,7 +141,7 @@ export async function findByCallSid(callSid: string): Promise<CallLog | null> {
     const result = await db.query<CallLog>(
       `SELECT cl.*, c.full_name as customer_name
        FROM call_logs cl
-       LEFT JOIN customers c ON cl.customer_id = c.id
+       LEFT JOIN patients c ON cl.patient_id = c.id
        WHERE cl.call_sid = $1`,
       [callSid]
     );
@@ -149,13 +149,13 @@ export async function findByCallSid(callSid: string): Promise<CallLog | null> {
   }
 
 //find calls by customer ID
-export async function findByCustomer(
+export async function findByPatient(
     customerId: number,
     limit: number ,
 ): Promise<CallLog[]> {
     const result = await db.query<CallLog>(
         `SELECT * FROM call_logs
-        WHERE customer_id = $1
+        WHERE patient_id = $1
         ORDER BY started_at DESC
         LIMIT $2`,
        [customerId, limit]
@@ -172,7 +172,7 @@ export async function findRecent(
   const result = await db.query<CallLog>(
       `SELECT cl.*, c.full_name as customer_name
       FROM call_logs cl
-      LEFT JOIN customers c ON cl.customer_id = c.id
+      LEFT JOIN patients c ON cl.patient_id = c.id
       WHERE cl.started_at BETWEEN $1 AND $2
       ORDER BY cl.started_at DESC
       LIMIT $3`,
@@ -189,7 +189,7 @@ export async function findTransferredCalls(
     const result = await db.query<CallLog>(
         `SELECT cl.*, c.full_name as customer_name
         FROM call_logs cl
-        LEFT JOIN customers c ON cl.customer_id = c.id
+        LEFT JOIN patients c ON cl.patient_id = c.id
         WHERE cl.was_transferred = true
           AND cl.started_at BETWEEN $1 AND $2
         ORDER BY cl.started_at DESC`,
@@ -206,7 +206,7 @@ export async function findCallsWithErrors(
     const result = await db.query<CallLog>(
         `SELECT cl.*, c.full_name as customer_name
         FROM call_logs cl
-        LEFT JOIN customers c ON cl.customer_id = c.id
+        LEFT JOIN patients c ON cl.patient_id = c.id
         WHERE cl.error_message IS NOT NULL
           AND cl.started_at BETWEEN $1 AND $2
         ORDER BY cl.started_at DESC`,
@@ -303,9 +303,9 @@ export async function getStats(
     appendToTranscript,
     markTransferred,
     logError,
-    linkReservation,
+    linkAppointment,
     findByCallSid,
-    findByCustomer,
+    findByPatient,
     findRecent,
     findTransferredCalls,
     findCallsWithErrors,
