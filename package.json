@@ -1,12 +1,12 @@
 {
-    "name": "ai-voice-assistant",
-    "version": "1.0.0",
-    "description": "AI-powered phone voice assistant for reservations using Twilio, Deepgram, and OpenAI",
+    "name": "neurospine-voice-assistant",
+    "version": "2.0.0",
+    "description": "AI-powered phone voice assistant for NeuroSpine Institute — appointment scheduling via Twilio, Deepgram, and OpenAI",
     "main": "dist/server.js",
     "scripts": {
         "build": "tsc",
         "start": "node dist/server.js",
-        "dev": "nodemon src/server.ts",
+        "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
         "lint": "eslint src/**/*.ts",
         "typecheck": "tsc --noEmit"
     },
@@ -15,18 +15,23 @@
         "twilio",
         "openai",
         "deepgram",
-        "typescript"
+        "typescript",
+        "neurospine",
+        "medical",
+        "appointments"
     ],
     "author": "",
     "license": "MIT",
     "dependencies": {
         "@deepgram/sdk": "^3.13.0",
         "@upstash/redis": "^1.36.2",
+        "bcryptjs": "^2.4.3",
         "cors": "^2.8.5",
         "dotenv": "^16.3.1",
         "express": "^4.18.2",
         "express-rate-limit": "^7.1.5",
         "helmet": "^7.1.0",
+        "jsonwebtoken": "^9.0.2",
         "morgan": "^1.10.0",
         "openai": "^4.104.0",
         "pg": "^8.11.3",
@@ -34,11 +39,14 @@
         "twilio": "^4.19.0",
         "uuid": "^9.0.1",
         "websocket": "^1.0.35",
-        "ws": "^8.14.2"
+        "ws": "^8.14.2",
+        "zod": "^3.23.8"
     },
     "devDependencies": {
+        "@types/bcryptjs": "^2.4.6",
         "@types/cors": "^2.8.19",
         "@types/express": "^4.17.25",
+        "@types/jsonwebtoken": "^9.0.7",
         "@types/morgan": "^1.9.10",
         "@types/node": "^20.19.32",
         "@types/pg": "^8.16.0",

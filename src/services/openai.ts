@@ -142,26 +142,27 @@ export async function chat(
 
   export async function generateCallSummary(transcript: string): Promise<string> {
     try {
-        const response = await openai.chat.completions.create({
-            model: 'gpt-4o-mini', //use smaller model for cost saving
-            messages: [
-                {
-                    role: 'system',
-                    content: 'Summarize this phone call transcript in 2-3 sentences.  Focus on the main topic and outcome.',
-                },
-                {
-                    role: 'user',
-                    content: transcript,
-                },
-            ],
-            temperature: 0.3,
-            max_tokens: 150,
-        });
-
-        return response.choices[0].message.content || 'unable to generate summary'
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Summarize this medical clinic phone call transcript in 2-3 sentences. Focus on the main topic, outcome, and any appointments booked or actions taken.',
+          },
+          {
+            role: 'user',
+            content: transcript,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 150,
+      });
+  
+      return response.choices[0].message.content || 'Unable to generate summary';
     } catch (error) {
-        logger.error('Failed to generate call summary', error);
-        return 'Unable to generate summary '
+      logger.error('Failed to generate call summary', error);
+      return 'Unable to generate summary';
     }
   }
 
@@ -169,71 +170,75 @@ export async function chat(
 
   export async function detectIntent(transcript: string): Promise<string> {
     try {
-        const response = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
-            messages: [
-                {
-                    role: 'system',
-                    content: `Classify the primary intent of this phone call into one of these categories:
-                    - new_reservation: Customer wants to make a new booking
-                    - modify_reservation: Customer wants to change an existing booking
-                    - cancel_reservation: Customer wants to cancel a booking
-                    - inquiry: Customer asking about restourant details
-                    - faq: General questions about hours, services, etc.
-                    - complaint: Customer has a complaint
-                    - other: Doesn't fit other categories
-                    Respond with only the category name.`,
-                },
-                {
-                    role: 'user',
-                    content: transcript,
-                },
-            ],
-            temperature: 0,
-            max_tokens: 20,
-        });
-
-        return response.choices[0].message.content?.toLowerCase().trim() || 'other'
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `Classify the primary intent of this medical clinic phone call into one of these categories:
+  - new_appointment: Patient wants to schedule a new appointment
+  - reschedule_appointment: Patient wants to change an existing appointment
+  - cancel_appointment: Patient wants to cancel an appointment
+  - appointment_inquiry: Patient asking about their existing appointments
+  - department_inquiry: Patient asking about departments, doctors, or services
+  - insurance_question: Patient asking about insurance or billing
+  - faq: General questions about hours, location, what to bring, etc.
+  - medical_concern: Patient describing symptoms or asking medical questions
+  - complaint: Patient has a complaint
+  - other: Doesn't fit other categories
+  Respond with only the category name.`,
+          },
+          {
+            role: 'user',
+            content: transcript,
+          },
+        ],
+        temperature: 0,
+        max_tokens: 20,
+      });
+  
+      return response.choices[0].message.content?.toLowerCase().trim() || 'other';
     } catch (error) {
-        logger.error('Failed to detect intent', error)
-        return 'unknown'
+      logger.error('Failed to detect intent', error);
+      return 'unknown';
     }
   }
 
   export async function analyzeSentiment(
     transcript: string
-  ): Promise<{sentiment: string; score: number}> {
-    try{
-        const response = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
-            messages: [
-                {
-                    role: 'system',
-                    content: `Analyze the customer's sentiment in this phone call.
-                    Respond with a JSON object containing:
-                    - sentiment: "positive", "neutral", or "negative"
-                    - score: a number from -1.0 (very negative) to 1.0 (very positive)
-                    Example: {"sentiment": "positive", "score": 0.7}`,
-                },
-                {
-                    role: 'user',
-                    content: transcript,
-                },
-            ],
-            temperature: 0,
-            max_tokens: 50,
-        })
-
-        const content = response.choices[0].message.content || '';
-        const parsed = JSON.parse(content);
-
-        return {
-            sentiment: parsed.sentiment || 'neutral',
-            score: typeof parsed.score === 'number' ? parsed.score : 0,
-        };
+  ): Promise<{ sentiment: string; score: number }> {
+    try {
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `Analyze the patient's sentiment in this medical clinic phone call.
+  Consider that patients calling a neurosurgery clinic may be in pain or anxious.
+  Respond with a JSON object containing:
+  - sentiment: "positive", "neutral", or "negative"
+  - score: a number from -1.0 (very negative) to 1.0 (very positive)
+  Example: {"sentiment": "positive", "score": 0.7}`,
+          },
+          {
+            role: 'user',
+            content: transcript,
+          },
+        ],
+        temperature: 0,
+        max_tokens: 50,
+      });
+  
+      const content = response.choices[0].message.content || '';
+      const parsed = JSON.parse(content);
+  
+      return {
+        sentiment: parsed.sentiment || 'neutral',
+        score: typeof parsed.score === 'number' ? parsed.score : 0,
+      };
     } catch (error) {
-        logger.error('failed to analyze sentiment', error);
-        return { sentiment: 'neutral', score: 0}
+      logger.error('Failed to analyze sentiment', error);
+      return { sentiment: 'neutral', score: 0 };
     }
   }
 
@@ -241,33 +246,34 @@ export async function chat(
 
   function formatMessageForOpenAI(message: Message): ChatCompletionMessageParam {
     if (message.role === 'tool') {
-        return {
-            role: 'tool',
-            tool_call_id: message.tool_call_id || '',
-            content: message.content,
-        }
-    }
-
-    if (message.role === 'assistant' && message.tool_calls) {
-        return {
-            role: 'assistant',
-            content: message.content || null,
-            tool_calls: message.tool_calls.map(tc => ({
-                id: tc.id,
-                type: 'function' as const,
-                function: {
-                    name: tc.function.name,
-                    arguments: tc.function.arguments,
-                },
-            })),
-        };
-    }
-
-    return {
-        role: message.role as 'user' | 'assistant' | 'system',
+      return {
+        role: 'tool',
+        tool_call_id: message.tool_call_id || '',
         content: message.content,
+      };
     }
+  
+    if (message.role === 'assistant' && message.tool_calls) {
+      return {
+        role: 'assistant',
+        content: message.content || null,
+        tool_calls: message.tool_calls.map((tc) => ({
+          id: tc.id,
+          type: 'function' as const,
+          function: {
+            name: tc.function.name,
+            arguments: tc.function.arguments,
+          },
+        })),
+      };
+    }
+  
+    return {
+      role: message.role as 'user' | 'assistant' | 'system',
+      content: message.content,
+    };
   }
+
 
 
   export default {

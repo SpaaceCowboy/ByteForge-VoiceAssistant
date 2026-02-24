@@ -150,15 +150,15 @@ ngrok http 3000
 - `GET /` - Server info
 - `GET /api/health` - Health check
 
-### Reservations
-- `GET /api/reservations` - List reservations
-- `GET /api/reservations/:id` - Get reservation
-- `PATCH /api/reservations/:id` - Update reservation
-- `DELETE /api/reservations/:id` - Cancel reservation
+### Appointments
+- `GET /api/appointments` - List reservations
+- `GET /api/appointments/:id` - Get reservation
+- `PATCH /api/appointments/:id` - Update reservation
+- `DELETE /api/appointments/:id` - Cancel reservation
 
 ### Customers
-- `GET /api/customers/search?q=query` - Search customers
-- `GET /api/customers/:id` - Get customer with history
+- `GET /api/patients/search?q=query` - Search customers
+- `GET /api/patients/:id` - Get customer with history
 
 ### Call Logs
 - `GET /api/calls` - List calls
