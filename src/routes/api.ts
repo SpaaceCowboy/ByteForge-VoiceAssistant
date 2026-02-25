@@ -1,23 +1,30 @@
-/**
- * ===========================================
- * API ROUTES - NEUROSPINE INSTITUTE
- * ===========================================
- *
- * REST API endpoints for the admin dashboard.
- * Provides CRUD for appointments, patients, calls, FAQs,
- * and analytics data.
- *
- */
+
 
 import { Router, Request, Response, NextFunction } from 'express';
 import { patientModel, callLogModel, faqModel, appointmentModel } from '../models';
 import { getCurrentDate, formatDate } from '../utils/helpers';
 import logger from '../utils/logger';
+import {
+  authenticate,
+  requireRole,
+  validateBody,
+  validateQuery,
+  appointmentModifySchema,
+  appointmentCancelSchema,
+  appointmentQuerySchema,
+  patientUpdateSchema,
+  patientSearchSchema,
+  callsQuerySchema,
+  faqCreateSchema,
+  faqUpdateSchema,
+  dateRangeQuerySchema,
+} from '../middleware';
+import type { AuthenticatedRequest } from '../middleware';
 import type { ApiResponse, PaginatedResponse } from '../../types/index';
 
 const router = Router();
 
-// Error handler wrapper
+// Async handler wrapper
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>
 ) {
@@ -27,7 +34,7 @@ function asyncHandler(
 }
 
 // ===========================================
-// HEALTH CHECK
+// HEALTH CHECK (public)
 // ===========================================
 
 router.get('/health', (req: Request, res: Response) => {
@@ -39,22 +46,23 @@ router.get('/health', (req: Request, res: Response) => {
 });
 
 // ===========================================
+// All routes below require authentication
+// ===========================================
+router.use(authenticate);
+
+// ===========================================
 // APPOINTMENTS
 // ===========================================
 
-// Get appointments (by date, defaults to today)
 router.get(
   '/appointments',
+  validateQuery(appointmentQuerySchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const { date, limit = '50', offset = '0' } = req.query;
+    const { date } = req.query;
 
-    let appointments;
-
-    if (date && typeof date === 'string') {
-      appointments = await appointmentModel.findByDate(date);
-    } else {
-      appointments = await appointmentModel.findByDate(getCurrentDate());
-    }
+    const targetDate =
+      date && typeof date === 'string' ? date : getCurrentDate();
+    const appointments = await appointmentModel.findByDate(targetDate);
 
     const response: PaginatedResponse<(typeof appointments)[0]> = {
       success: true,
@@ -66,7 +74,6 @@ router.get(
   })
 );
 
-// Get a specific appointment
 router.get(
   '/appointments/:id',
   asyncHandler(async (req: Request, res: Response) => {
@@ -74,23 +81,17 @@ router.get(
     const appointment = await appointmentModel.findById(id);
 
     if (!appointment) {
-      res.status(404).json({
-        success: false,
-        error: 'Appointment not found',
-      });
+      res.status(404).json({ success: false, error: 'Appointment not found' });
       return;
     }
 
-    res.json({
-      success: true,
-      data: appointment,
-    });
+    res.json({ success: true, data: appointment });
   })
 );
 
-// Modify an appointment
 router.patch(
   '/appointments/:id',
+  validateBody(appointmentModifySchema),
   asyncHandler(async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const updates = req.body;
@@ -109,23 +110,17 @@ router.patch(
     });
 
     if (!appointment) {
-      res.status(404).json({
-        success: false,
-        error: 'Appointment not found',
-      });
+      res.status(404).json({ success: false, error: 'Appointment not found' });
       return;
     }
 
-    res.json({
-      success: true,
-      data: appointment,
-    });
+    res.json({ success: true, data: appointment });
   })
 );
 
-// Cancel an appointment
 router.delete(
   '/appointments/:id',
+  validateBody(appointmentCancelSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const { reason } = req.body;
@@ -133,17 +128,11 @@ router.delete(
     const appointment = await appointmentModel.cancel(id, reason);
 
     if (!appointment) {
-      res.status(404).json({
-        success: false,
-        error: 'Appointment not found',
-      });
+      res.status(404).json({ success: false, error: 'Appointment not found' });
       return;
     }
 
-    res.json({
-      success: true,
-      data: appointment,
-    });
+    res.json({ success: true, data: appointment });
   })
 );
 
@@ -151,17 +140,14 @@ router.delete(
 // PATIENTS
 // ===========================================
 
-// Search patients by name, phone, or email
 router.get(
   '/patients/search',
+  validateQuery(patientSearchSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const { q, limit = '20' } = req.query;
 
     if (!q || typeof q !== 'string') {
-      res.status(400).json({
-        success: false,
-        error: 'Search query (q) is required',
-      });
+      res.status(400).json({ success: false, error: 'Search query (q) required' });
       return;
     }
 
@@ -175,7 +161,6 @@ router.get(
   })
 );
 
-// Get a patient with their appointment/call history
 router.get(
   '/patients/:id',
   asyncHandler(async (req: Request, res: Response) => {
@@ -183,10 +168,7 @@ router.get(
     const patient = await patientModel.findById(id);
 
     if (!patient) {
-      res.status(404).json({
-        success: false,
-        error: 'Patient not found',
-      });
+      res.status(404).json({ success: false, error: 'Patient not found' });
       return;
     }
 
@@ -194,16 +176,14 @@ router.get(
       patient.phone
     );
 
-    res.json({
-      success: true,
-      data: patientWithHistory,
-    });
+    res.json({ success: true, data: patientWithHistory });
   })
 );
 
-// Update patient info
 router.patch(
   '/patients/:id',
+  requireRole('moderator'),
+  validateBody(patientUpdateSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const updates = req.body;
@@ -224,17 +204,11 @@ router.patch(
     });
 
     if (!patient) {
-      res.status(404).json({
-        success: false,
-        error: 'Patient not found',
-      });
+      res.status(404).json({ success: false, error: 'Patient not found' });
       return;
     }
 
-    res.json({
-      success: true,
-      data: patient,
-    });
+    res.json({ success: true, data: patient });
   })
 );
 
@@ -242,9 +216,9 @@ router.patch(
 // CALL LOGS
 // ===========================================
 
-// Get recent call logs
 router.get(
   '/calls',
+  validateQuery(callsQuerySchema),
   asyncHandler(async (req: Request, res: Response) => {
     const { start_date, end_date, transferred, limit = '50' } = req.query;
 
@@ -271,7 +245,6 @@ router.get(
   })
 );
 
-// Get a specific call log
 router.get(
   '/calls/:callSid',
   asyncHandler(async (req: Request, res: Response) => {
@@ -279,17 +252,11 @@ router.get(
     const call = await callLogModel.findByCallSid(callSid);
 
     if (!call) {
-      res.status(404).json({
-        success: false,
-        error: 'Call not found',
-      });
+      res.status(404).json({ success: false, error: 'Call not found' });
       return;
     }
 
-    res.json({
-      success: true,
-      data: call,
-    });
+    res.json({ success: true, data: call });
   })
 );
 
@@ -297,9 +264,9 @@ router.get(
 // ANALYTICS
 // ===========================================
 
-// Get overview statistics
 router.get(
   '/analytics/overview',
+  validateQuery(dateRangeQuerySchema),
   asyncHandler(async (req: Request, res: Response) => {
     const { start_date, end_date } = req.query;
 
@@ -322,9 +289,9 @@ router.get(
   })
 );
 
-// Get intent breakdown
 router.get(
   '/analytics/intents',
+  validateQuery(dateRangeQuerySchema),
   asyncHandler(async (req: Request, res: Response) => {
     const { start_date, end_date } = req.query;
 
@@ -333,16 +300,13 @@ router.get(
 
     const intents = await callLogModel.getIntentBreakdown(startDate, endDate);
 
-    res.json({
-      success: true,
-      data: intents,
-    });
+    res.json({ success: true, data: intents });
   })
 );
 
-// Get hourly call distribution
 router.get(
   '/analytics/hourly',
+  validateQuery(dateRangeQuerySchema),
   asyncHandler(async (req: Request, res: Response) => {
     const { start_date, end_date } = req.query;
 
@@ -351,10 +315,7 @@ router.get(
 
     const hourly = await callLogModel.getHourlyDistribution(startDate, endDate);
 
-    res.json({
-      success: true,
-      data: hourly,
-    });
+    res.json({ success: true, data: hourly });
   })
 );
 
@@ -362,7 +323,7 @@ router.get(
 // FAQs
 // ===========================================
 
-// Get all FAQs (optionally filtered by category)
+// Read: any authenticated user
 router.get(
   '/faqs',
   asyncHandler(async (req: Request, res: Response) => {
@@ -384,22 +345,19 @@ router.get(
   })
 );
 
-// Get FAQ categories
 router.get(
   '/faqs/categories',
   asyncHandler(async (req: Request, res: Response) => {
     const categories = await faqModel.getCategories();
-
-    res.json({
-      success: true,
-      data: categories,
-    });
+    res.json({ success: true, data: categories });
   })
 );
 
-// Create a new FAQ
+// Write: moderator only
 router.post(
   '/faqs',
+  requireRole('moderator'),
+  validateBody(faqCreateSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const {
       questionPattern,
@@ -410,14 +368,6 @@ router.post(
       priority,
     } = req.body;
 
-    if (!questionPattern || !answer || !category) {
-      res.status(400).json({
-        success: false,
-        error: 'questionPattern, answer, and category are required',
-      });
-      return;
-    }
-
     const faq = await faqModel.create({
       questionPattern,
       questionVariations,
@@ -427,16 +377,14 @@ router.post(
       priority,
     });
 
-    res.status(201).json({
-      success: true,
-      data: faq,
-    });
+    res.status(201).json({ success: true, data: faq });
   })
 );
 
-// Update a FAQ
 router.patch(
   '/faqs/:id',
+  requireRole('moderator'),
+  validateBody(faqUpdateSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
     const updates = req.body;
@@ -452,32 +400,23 @@ router.patch(
     });
 
     if (!faq) {
-      res.status(404).json({
-        success: false,
-        error: 'FAQ not found',
-      });
+      res.status(404).json({ success: false, error: 'FAQ not found' });
       return;
     }
 
-    res.json({
-      success: true,
-      data: faq,
-    });
+    res.json({ success: true, data: faq });
   })
 );
 
-// Delete (deactivate) a FAQ
 router.delete(
   '/faqs/:id',
+  requireRole('moderator'),
   asyncHandler(async (req: Request, res: Response) => {
     const id = parseInt(req.params.id);
 
     await faqModel.deactivate(id);
 
-    res.json({
-      success: true,
-      message: 'FAQ deactivated',
-    });
+    res.json({ success: true, message: 'FAQ deactivated' });
   })
 );
 
