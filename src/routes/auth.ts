@@ -4,6 +4,7 @@
  * ===========================================
  *
  * Handles authentication for the admin dashboard:
+ * - POST /auth/setup    — one-time first moderator creation (locks after first use)
  * - POST /auth/login    — email + password → JWT
  * - POST /auth/register — create new dashboard user (moderator-only)
  * - GET  /auth/me       — get current user profile
@@ -39,6 +40,79 @@ function asyncHandler(
     Promise.resolve(fn(req, res, next)).catch(next);
   };
 }
+
+// ===========================================
+// POST /auth/setup (one-time first moderator)
+// ===========================================
+// Only works when ZERO users exist in the database.
+// After the first moderator is created, this endpoint
+// permanently returns 403.
+
+router.post(
+  '/setup',
+  validateBody(registerSchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    // Check if any users exist
+    const countResult = await db.query<{ count: string }>(
+      'SELECT COUNT(*) FROM dashboard_users'
+    );
+
+    const userCount = parseInt(countResult.rows[0].count);
+
+    if (userCount > 0) {
+      res.status(403).json({
+        success: false,
+        error: 'Setup already completed. Use /auth/login to sign in, or ask a moderator to create your account.',
+      });
+      return;
+    }
+
+    const { email, password, fullName } = req.body;
+    const normalizedEmail = email.toLowerCase();
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // Create the first moderator
+    const result = await db.query<{
+      id: number;
+      email: string;
+      full_name: string;
+      role: DashboardUserRole;
+      created_at: Date;
+    }>(
+      `INSERT INTO dashboard_users (email, password_hash, full_name, role)
+       VALUES ($1, $2, $3, 'moderator')
+       RETURNING id, email, full_name, role, created_at`,
+      [normalizedEmail, passwordHash, fullName]
+    );
+
+    const newUser = result.rows[0];
+
+    // Auto-generate a token so they're immediately logged in
+    const token = signToken(newUser.id, newUser.email, newUser.role);
+
+    logger.info('Initial moderator created via /auth/setup', {
+      userId: newUser.id,
+      email: newUser.email,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'First moderator account created. This endpoint is now locked.',
+      data: {
+        token,
+        user: {
+          id: newUser.id,
+          email: newUser.email,
+          fullName: newUser.full_name,
+          role: newUser.role,
+          createdAt: newUser.created_at,
+        },
+      },
+    });
+  })
+);
 
 // ===========================================
 // POST /auth/login
