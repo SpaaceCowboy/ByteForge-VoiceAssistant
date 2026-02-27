@@ -65,6 +65,67 @@ function asyncHandler(
 // After the first moderator is created, this endpoint
 // permanently returns 403.
 
+/**
+ * @openapi
+ * /auth/setup:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Create first moderator (one-time)
+ *     description: >
+ *       Bootstrap endpoint that creates the initial moderator account.
+ *       Only works when zero users exist in the database — permanently returns 403 after first use.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password, fullName]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 minLength: 8
+ *               fullName:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: First moderator created with auto-generated JWT
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token:
+ *                       type: string
+ *                     user:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: integer
+ *                         email:
+ *                           type: string
+ *                         fullName:
+ *                           type: string
+ *                         role:
+ *                           type: string
+ *                         createdAt:
+ *                           type: string
+ *                           format: date-time
+ *       403:
+ *         description: Setup already completed
+ *       429:
+ *         description: Rate limit exceeded
+ */
 router.post(
   '/setup',
   setupLimiter,
@@ -136,6 +197,65 @@ router.post(
 // POST /auth/login
 // ===========================================
 
+/**
+ * @openapi
+ * /auth/login:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Login
+ *     description: Authenticate with email and password to receive a JWT token.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: admin@neurospine.com
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token:
+ *                       type: string
+ *                     user:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: integer
+ *                         email:
+ *                           type: string
+ *                         fullName:
+ *                           type: string
+ *                         role:
+ *                           type: string
+ *                           enum: [user, moderator]
+ *       401:
+ *         description: Invalid credentials
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Account deactivated
+ *       429:
+ *         description: Rate limit exceeded
+ */
 router.post(
   '/login',
   loginLimiter,
@@ -216,6 +336,63 @@ router.post(
 // POST /auth/register (moderator-only)
 // ===========================================
 
+/**
+ * @openapi
+ * /auth/register:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Register new user (moderator only)
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password, fullName]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 minLength: 8
+ *               fullName:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *                 enum: [user, moderator]
+ *                 default: user
+ *     responses:
+ *       201:
+ *         description: User created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                     email:
+ *                       type: string
+ *                     fullName:
+ *                       type: string
+ *                     role:
+ *                       type: string
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *       403:
+ *         description: Moderator role required
+ *       409:
+ *         description: Email already exists
+ */
 router.post(
   '/register',
   authenticate,
@@ -283,6 +460,48 @@ router.post(
 // GET /auth/me
 // ===========================================
 
+/**
+ * @openapi
+ * /auth/me:
+ *   get:
+ *     tags: [Auth]
+ *     summary: Get current user profile
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Current user details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                     email:
+ *                       type: string
+ *                     fullName:
+ *                       type: string
+ *                     role:
+ *                       type: string
+ *                       enum: [user, moderator]
+ *                     isActive:
+ *                       type: boolean
+ *                     lastLogin:
+ *                       type: string
+ *                       format: date-time
+ *                       nullable: true
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *       401:
+ *         description: Not authenticated
+ */
 router.get(
   '/me',
   authenticate,
@@ -333,6 +552,44 @@ router.get(
 // PATCH /auth/password (change own password)
 // ===========================================
 
+/**
+ * @openapi
+ * /auth/password:
+ *   patch:
+ *     tags: [Auth]
+ *     summary: Change own password
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [password, newPassword]
+ *             properties:
+ *               password:
+ *                 type: string
+ *                 description: Current password
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 8
+ *                 description: New password
+ *     responses:
+ *       200:
+ *         description: Password updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       401:
+ *         description: Current password incorrect
+ */
 router.patch(
   '/password',
   authenticate,

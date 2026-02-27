@@ -28,7 +28,8 @@ ByteForge-VoiceAssistant/
 ├── src/
 │   ├── config/
 │   │   ├── database.ts        # PostgreSQL connection pool (pg)
-│   │   └── redis.ts           # Upstash Redis (REST client)
+│   │   ├── redis.ts           # Upstash Redis (REST client)
+│   │   └── swagger.ts         # OpenAPI 3.0 spec configuration
 │   ├── functions/
 │   │   └── tools.ts           # OpenAI tool definitions + system prompt
 │   ├── middleware/
@@ -143,6 +144,8 @@ npm run build      # Compile TypeScript to dist/
 npm start          # Build + run production server
 npm run typecheck  # Type check only (tsc --noEmit)
 npm run lint       # ESLint
+npm test           # Run tests (Vitest)
+npm run test:watch # Run tests in watch mode
 ```
 
 ## Environment Variables
@@ -178,8 +181,25 @@ Two separate auth systems:
 - `POST /auth/login` — Email + password returns JWT
 - `POST /auth/register` — Create new user (moderator-only)
 - `GET /auth/me` — Current user profile
+- `PATCH /auth/password` — Change own password
 
 **Twilio Webhooks** — HMAC-SHA1 signature validation (skip with `SKIP_TWILIO_VALIDATION=true` in dev)
+
+## API Documentation
+
+Interactive Swagger UI is available at:
+
+```
+http://localhost:3000/api/docs
+```
+
+The raw OpenAPI 3.0 JSON spec is served at:
+
+```
+http://localhost:3000/api/docs.json
+```
+
+Both endpoints are public (no authentication required).
 
 ## API Endpoints
 
@@ -207,6 +227,10 @@ All `/api` routes require a valid JWT Bearer token.
 - `GET /api/analytics/overview` — Call and appointment stats
 - `GET /api/analytics/intents` — Intent breakdown
 - `GET /api/analytics/hourly` — Hourly call distribution
+
+### Sessions
+- `GET /api/sessions/stats` — Session statistics (moderator)
+- `POST /api/sessions/cleanup` — Trigger session cleanup (moderator)
 
 ### FAQs
 - `GET /api/faqs` — List FAQs (filterable by category)

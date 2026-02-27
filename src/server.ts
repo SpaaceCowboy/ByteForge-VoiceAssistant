@@ -17,10 +17,12 @@ import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 
+import swaggerUi from 'swagger-ui-express';
 import { twilioRoutes, setupMediaStreamWebSocket, apiRoutes, authRoutes } from './routes';
 import { validateTwilioWebhook, requestLogger } from './middleware';
 import database from './config/database';
 import redis from './config/redis';
+import { swaggerSpec } from './config/swagger';
 import { deleteOldSessions } from './models/session';
 import logger from './utils/logger';
 
@@ -116,6 +118,12 @@ app.use('/twilio', validateTwilioWebhook, twilioRoutes);
 
 // Auth routes (public — login, protected — register, me)
 app.use('/auth', authRoutes);
+
+// Swagger docs (public)
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get('/api/docs.json', (_req: Request, res: Response) => {
+  res.json(swaggerSpec);
+});
 
 // API routes (JWT-protected — see middleware inside api.ts)
 app.use('/api', apiRoutes);
