@@ -131,6 +131,16 @@ export async function refreshSessionTTL(callSid: string): Promise<void> {
   await client.expire(key, SESSION_TTL);
 }
 
+export async function ping(): Promise<boolean> {
+  try {
+    const result = await client.ping();
+    return result === 'PONG';
+  } catch (error) {
+    logger.error('Redis ping failed', error);
+    return false;
+  }
+}
+
 // Connection management (not needed for REST API, but kept for compatibility)
 export async function connect(): Promise<void> {
   logger.info('Redis: Connected (Upstash REST)');
@@ -151,6 +161,7 @@ export default {
   deleteSession,
   getActiveSessions,
   refreshSessionTTL,
+  ping,
   connect,
   disconnect,
 };

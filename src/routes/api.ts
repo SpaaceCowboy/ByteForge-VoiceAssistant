@@ -1,8 +1,10 @@
 
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { patientModel, callLogModel, faqModel, appointmentModel } from '../models';
+import { patientModel, callLogModel, faqModel, appointmentModel, sessionModel } from '../models';
 import { getCurrentDate, formatDate } from '../utils/helpers';
+import database from '../config/database';
+import redis from '../config/redis';
 import logger from '../utils/logger';
 import {
   authenticate,
@@ -46,13 +48,40 @@ function parseIdParam(req: Request, res: Response): number | null {
 // HEALTH CHECK (public)
 // ===========================================
 
-router.get('/health', (req: Request, res: Response) => {
-  res.json({
-    status: 'ok',
+router.get('/health', asyncHandler(async (req: Request, res: Response) => {
+  const baseResponse = {
+    status: 'ok' as 'ok' | 'degraded' | 'error',
     timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version || '1.0.0',
+    version: process.env.npm_package_version || '2.0.0',
+  };
+
+  if (req.query.detailed !== 'true') {
+    res.json(baseResponse);
+    return;
+  }
+
+  const [dbHealthy, redisHealthy] = await Promise.all([
+    database.testConnection().catch(() => false),
+    redis.ping().catch(() => false),
+  ]);
+
+  const status = dbHealthy && redisHealthy
+    ? 'ok'
+    : dbHealthy || redisHealthy
+      ? 'degraded'
+      : 'error';
+
+  const statusCode = status === 'error' ? 503 : 200;
+
+  res.status(statusCode).json({
+    ...baseResponse,
+    status,
+    components: {
+      database: { status: dbHealthy ? 'ok' : 'error' },
+      redis: { status: redisHealthy ? 'ok' : 'error' },
+    },
   });
-});
+}));
 
 // ===========================================
 // All routes below require authentication
@@ -330,6 +359,29 @@ router.get(
     const hourly = await callLogModel.getHourlyDistribution(startDate, endDate);
 
     res.json({ success: true, data: hourly });
+  })
+);
+
+// ===========================================
+// SESSION MANAGEMENT (moderator only)
+// ===========================================
+
+router.get(
+  '/sessions/stats',
+  requireRole('moderator'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const stats = await sessionModel.getSessionStats();
+    res.json({ success: true, data: stats });
+  })
+);
+
+router.post(
+  '/sessions/cleanup',
+  requireRole('moderator'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const olderThanHours = parseInt(req.query.hours as string) || 24;
+    const deletedCount = await sessionModel.deleteOldSessions(olderThanHours);
+    res.json({ success: true, data: { deletedCount, olderThanHours } });
   })
 );
 

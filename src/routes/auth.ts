@@ -28,9 +28,26 @@ import {
   loginSchema,
   registerSchema,
 } from '../middleware/validate';
+import rateLimit from 'express-rate-limit';
 import type { DashboardUserRole } from '../../types/index';
 
 const router = Router();
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { success: false, error: 'Too many login attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const setupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  message: { success: false, error: 'Too many setup attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Async handler wrapper
 function asyncHandler(
@@ -50,6 +67,7 @@ function asyncHandler(
 
 router.post(
   '/setup',
+  setupLimiter,
   validateBody(registerSchema),
   asyncHandler(async (req: Request, res: Response) => {
     // Check if any users exist
@@ -120,6 +138,7 @@ router.post(
 
 router.post(
   '/login',
+  loginLimiter,
   validateBody(loginSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const { email, password } = req.body;

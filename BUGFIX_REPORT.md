@@ -1,7 +1,7 @@
-# Bug Fix Report — ByteForge Voice Assistant
+# Bug Fix & Feature Report — ByteForge Voice Assistant
 
 **Date:** 2026-02-27
-**Scope:** All non-comment bugs across the codebase, prioritized by severity
+**Scope:** All non-comment bugs across the codebase + operational improvements
 
 ---
 
@@ -308,6 +308,104 @@ Three OpenAI function call handlers (`handleCheckAvailability`, `handleGetAppoin
 
 ---
 
+---
+
+## Round 3 — Feature Additions
+
+### 30. Test Framework (Vitest) — 67 unit tests
+
+No test infrastructure existed. Set up Vitest with TypeScript path alias support.
+
+**New files:**
+- `vitest.config.ts` — config with path aliases mirroring tsconfig
+- `src/utils/helpers.test.ts` — 57 tests covering `parseDate`, `parseTime`, `formatDate`, `formatTime`, `normalizePhone`, `formatPhoneForDisplay`, `formatTimeForDisplay`, `extractNumber`, `cleanTextForSpeech`, `truncate`, `titleCase`, `generateConfirmationCode`, `validateAppointment`
+- `src/middleware/auth.test.ts` — 10 tests covering `signToken`/`verifyToken` round-trip, invalid tokens, wrong secret, `requireRole` authorization
+
+**Modified:**
+- `package.json` — added `vitest` devDependency, `test` and `test:watch` scripts
+- `tsconfig.json` — added `**/*.test.ts` to exclude (prevents test files compiling into `dist/`)
+
+---
+
+### 31. Structured Request Logging — replaces Morgan
+
+Morgan logged Apache-format strings. Replaced with a custom middleware that uses the existing `logger.request()` helper for structured output with method, path, status code, and duration.
+
+**New file:** `src/middleware/requestLogger.ts` — hooks into `res.on('finish')`, calculates duration, no sensitive data logged
+
+**Modified:**
+- `src/server.ts` — replaced Morgan with `requestLogger`
+- `src/middleware/index.ts` — exports `requestLogger`
+- `package.json` — removed `morgan` and `@types/morgan` dependencies
+
+---
+
+### 32. Deep Health Check — `GET /api/health?detailed=true`
+
+The health endpoint was a static `{ status: 'ok' }` with no actual connectivity checks.
+
+**Enhanced behavior:**
+- `GET /api/health` — fast response, no I/O (unchanged default)
+- `GET /api/health?detailed=true` — parallel database (`SELECT NOW()`) and Redis (`PING`) checks, returns per-component status
+
+```json
+{
+  "status": "degraded",
+  "timestamp": "...",
+  "version": "2.0.0",
+  "components": {
+    "database": { "status": "ok" },
+    "redis": { "status": "error" }
+  }
+}
+```
+
+Returns `200` for `ok`/`degraded`, `503` when all components are down.
+
+**Modified:**
+- `src/config/redis.ts` — added `ping()` function
+- `src/routes/api.ts` — enhanced health endpoint with detailed mode
+
+---
+
+### 33. Stricter Auth Rate Limiting — per-route limits
+
+The blanket 20 req/15min limiter on all `/auth` routes was too generous for sensitive endpoints.
+
+**New per-route limiters in `src/routes/auth.ts`:**
+- `POST /auth/login` — 5 requests per 15 minutes (brute-force protection)
+- `POST /auth/setup` — 3 requests per hour (one-time endpoint)
+
+**Modified:**
+- `src/routes/auth.ts` — added `loginLimiter` and `setupLimiter` with `express-rate-limit`
+- `src/server.ts` — removed blanket `authLimiter` (remaining auth routes are JWT-protected)
+
+---
+
+### 34. PostgreSQL Session Cleanup
+
+The `conversation_sessions` table existed in the schema but was never read or written — sessions lived only in Redis with a 1-hour TTL. Now sessions are persisted to the database for audit/backup and cleaned up automatically.
+
+**New file:** `src/models/session.ts` — `upsertSession`, `markInactive`, `deleteOldSessions`, `getSessionStats`
+
+**Session lifecycle:**
+1. `initializeConversation` → persists session to DB (`is_active = TRUE`)
+2. `handleEndCall` / `handleCallEnded` → marks session inactive in DB, then deletes from Redis
+3. Server runs `setInterval` every 6 hours → deletes inactive sessions older than 24h
+4. Timer uses `.unref()` so it doesn't block shutdown; cleared on `SIGTERM`/`SIGINT`
+
+**Admin endpoints (moderator-only):**
+- `GET /api/sessions/stats` — total, active, inactive counts + oldest inactive timestamp
+- `POST /api/sessions/cleanup?hours=24` — manually trigger cleanup
+
+**Modified:**
+- `src/models/index.ts` — exports `sessionModel`
+- `src/services/conversation.ts` — session persistence on init, mark inactive on end
+- `src/server.ts` — periodic cleanup timer + shutdown cleanup
+- `src/routes/api.ts` — admin session endpoints
+
+---
+
 ## Files Changed
 
 | File | Changes |
@@ -315,13 +413,27 @@ Three OpenAI function call handlers (`handleCheckAvailability`, `handleGetAppoin
 | `src/models/patient.ts` | Fixed 3 critical SQL bugs |
 | `src/middleware/twilioAuth.ts` | Fixed 3 typos (env var, header, error message) |
 | `src/middleware/auth.ts` | Async/await, Bearer check, env typo, JWT type fixes |
-| `src/services/conversation.ts` | Null safety, error isolation, dead code, type fixes, is_new_patient, 3 handler try-catches |
+| `src/services/conversation.ts` | Null safety, error isolation, dead code, type fixes, is_new_patient, 3 handler try-catches, session persistence |
 | `src/config/database.ts` | Pool error logging |
-| `src/config/redis.ts` | Env var validation |
+| `src/config/redis.ts` | Env var validation, `ping()` for health check |
 | `src/models/appointment.ts` | Null check on parseInt |
 | `src/models/callLog.ts` | Fixed 4 column alias mismatches |
-| `src/server.ts` | Proper async graceful shutdown |
+| `src/server.ts` | Graceful shutdown, replaced Morgan, removed authLimiter, session cleanup timer |
 | `src/services/deepgram.ts` | Connection cleanup on error |
 | `src/utils/helpers.ts` | PM time edge case |
-| `src/routes/api.ts` | NaN validation on all ID route params |
-| `package.json` | Removed unused redis dependency |
+| `src/routes/api.ts` | NaN validation, deep health check, session admin endpoints |
+| `src/routes/auth.ts` | Per-route rate limiters (login, setup) |
+| `src/middleware/index.ts` | Exports requestLogger |
+| `src/models/index.ts` | Exports sessionModel |
+| `package.json` | Removed redis/morgan, added vitest, test scripts |
+| `tsconfig.json` | Exclude test files from build |
+
+## New Files
+
+| File | Purpose |
+|------|---------|
+| `vitest.config.ts` | Vitest configuration with path aliases |
+| `src/utils/helpers.test.ts` | 57 unit tests for date/time/phone/text helpers |
+| `src/middleware/auth.test.ts` | 10 unit tests for JWT auth + role checks |
+| `src/middleware/requestLogger.ts` | Structured request logging middleware |
+| `src/models/session.ts` | Session DB persistence + cleanup model |

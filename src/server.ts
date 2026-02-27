@@ -15,13 +15,13 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import { createServer, Server } from 'http';
 import helmet from 'helmet';
 import cors from 'cors';
-import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 
 import { twilioRoutes, setupMediaStreamWebSocket, apiRoutes, authRoutes } from './routes';
-import { validateTwilioWebhook } from './middleware';
+import { validateTwilioWebhook, requestLogger } from './middleware';
 import database from './config/database';
 import redis from './config/redis';
+import { deleteOldSessions } from './models/session';
 import logger from './utils/logger';
 
 // ===========================================
@@ -89,13 +89,7 @@ app.use(
 );
 
 // Request logging
-app.use(
-  morgan('combined', {
-    stream: {
-      write: (message: string) => logger.info(message.trim()),
-    },
-  })
-);
+app.use(requestLogger);
 
 // Body parsing
 app.use(express.urlencoded({ extended: true }));
@@ -111,16 +105,7 @@ const apiLimiter = rateLimit({
   skip: (req: Request) => req.path.startsWith('/twilio'),
 });
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20, // Stricter for auth endpoints
-  message: { error: 'Too many login attempts, please try again later' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
 app.use('/api', apiLimiter);
-app.use('/auth', authLimiter);
 
 // ===========================================
 // ROUTES
@@ -187,6 +172,7 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
 // ===========================================
 
 const server: Server = createServer(app);
+let sessionCleanupTimer: NodeJS.Timeout | null = null;
 
 setupMediaStreamWebSocket(server);
 
@@ -227,6 +213,17 @@ async function startServer(): Promise<void> {
       logger.info('For local development with ngrok:');
       logger.info(`  ngrok http ${PORT}`);
       logger.info('');
+
+      // Periodic session cleanup: every 6 hours, delete sessions inactive for >24h
+      const CLEANUP_INTERVAL = 6 * 60 * 60 * 1000;
+      sessionCleanupTimer = setInterval(async () => {
+        try {
+          await deleteOldSessions(24);
+        } catch (error) {
+          logger.error('Session cleanup failed', error);
+        }
+      }, CLEANUP_INTERVAL);
+      sessionCleanupTimer.unref();
     });
   } catch (error) {
     logger.error('Failed to start server', error);
@@ -240,6 +237,8 @@ async function startServer(): Promise<void> {
 
 async function shutdown(signal: string): Promise<void> {
   logger.info(`${signal} received. Starting graceful shutdown...`);
+
+  if (sessionCleanupTimer) clearInterval(sessionCleanupTimer);
 
   const forceShutdownTimeout = setTimeout(() => {
     logger.error('Forceful shutdown due to timeout');

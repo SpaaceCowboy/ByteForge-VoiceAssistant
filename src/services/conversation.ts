@@ -1,6 +1,6 @@
 //manages the flow of , function execution, and cordinates between all other serviices.
 
-import { patientModel, callLogModel, faqModel, appointmentModel } from '../models';
+import { patientModel, callLogModel, faqModel, appointmentModel, sessionModel } from '../models';
 import openaiService from './openai';
 import ttsService from './tts';
 import redis from '../config/redis';
@@ -65,6 +65,9 @@ export async function initializeConversation(
 
     // store in redis
     await redis.setSession(callSid, session);
+
+    // persist to database for backup/audit
+    await sessionModel.upsertSession(callSid, session.state, session.messageHistory, session.collectedData, true);
 
     logger.call(callSid, 'info', 'Session initialized', {
       customerId: patient.id,
@@ -742,8 +745,9 @@ async function handleEndCall(
   })
 
  //delete session
+ await sessionModel.markInactive(callSid);
  await redis.deleteSession(callSid);
- 
+
  return {
   success: true,
   data: { ending: true},
@@ -777,6 +781,7 @@ export async function handleCallEnded(
   }
 
   //clean up session
+  await sessionModel.markInactive(callSid);
   await redis.deleteSession(callSid)
 }
 
