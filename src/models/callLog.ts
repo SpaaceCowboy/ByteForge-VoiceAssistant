@@ -139,7 +139,7 @@ export async function linkAppointment(
 //find call log by call SID
 export async function findByCallSid(callSid: string): Promise<CallLog | null> {
     const result = await db.query<CallLog>(
-      `SELECT cl.*, c.full_name as customer_name
+      `SELECT cl.*, c.full_name as patient_name
        FROM call_logs cl
        LEFT JOIN patients c ON cl.patient_id = c.id
        WHERE cl.call_sid = $1`,
@@ -170,7 +170,7 @@ export async function findRecent(
   limit: number = 50
 ): Promise<CallLog[]> {
   const result = await db.query<CallLog>(
-      `SELECT cl.*, c.full_name as customer_name
+      `SELECT cl.*, c.full_name as patient_name
       FROM call_logs cl
       LEFT JOIN patients c ON cl.patient_id = c.id
       WHERE cl.started_at BETWEEN $1 AND $2
@@ -187,7 +187,7 @@ export async function findTransferredCalls(
     endDate: string
 ): Promise<CallLog[]> {
     const result = await db.query<CallLog>(
-        `SELECT cl.*, c.full_name as customer_name
+        `SELECT cl.*, c.full_name as patient_name
         FROM call_logs cl
         LEFT JOIN patients c ON cl.patient_id = c.id
         WHERE cl.was_transferred = true
@@ -204,7 +204,7 @@ export async function findCallsWithErrors(
     endDate: string
 ): Promise<CallLog[]> {
     const result = await db.query<CallLog>(
-        `SELECT cl.*, c.full_name as customer_name
+        `SELECT cl.*, c.full_name as patient_name
         FROM call_logs cl
         LEFT JOIN patients c ON cl.patient_id = c.id
         WHERE cl.error_message IS NOT NULL

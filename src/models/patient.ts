@@ -51,11 +51,11 @@ export async function getPatientWithHistory(
         `SELECT a.*,
         d.full_name AS doctor_name, d.title AS doctor_title,
         dep.name AS department_name,
-        1.name AS location_name,
+        l.name AS location_name
         FROM appointments a
-        LEFT JOIN doctors d ON a.doctor_id = dep.id
-        LEFT JOIN departments dep ON a.department_id = deep.id
-        LEFT JOIN locations 1 ON a.location_id = 1.id
+        LEFT JOIN doctors d ON a.doctor_id = d.id
+        LEFT JOIN departments dep ON a.department_id = dep.id
+        LEFT JOIN locations l ON a.location_id = l.id
         WHERE a.patient_id = $1
         ORDER BY a.appointment_date DESC, a.appointment_time DESC
         LIMIT 10`,
@@ -177,8 +177,8 @@ export async function updateInsurance(
 //increment the total reservations counter 
 export async function incrementAppointmentCount(id: number):  Promise<void> {
     await db.query(
-        `UPDATE customers
-        SET total_reservations = total_reservations + 1,
+        `UPDATE patients
+        SET total_appointments = total_appointments + 1,
         updated_at = CURRENT_TIMESTAMP
         WHERE id = $1`,
         [id]
@@ -188,10 +188,10 @@ export async function incrementAppointmentCount(id: number):  Promise<void> {
 // add notes to patient record 
 export async function addNote(id: number, note: string): Promise<Patient | null> {
     const result = await db.query<Patient>(
-        `UPDATE customers
-        SET notes = CASE 
+        `UPDATE patients
+        SET notes = CASE
         WHEN notes IS NULL THEN $2
-        ELSE NOTES || E'\n' || $2
+        ELSE notes || E'\n' || $2
         END,
         updated_at = CURRENT_TIMESTAMP
         WHERE id = $1

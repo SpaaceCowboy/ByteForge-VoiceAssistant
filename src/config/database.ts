@@ -39,7 +39,7 @@ pool.on('connect', () => {
 });
 
 pool.on('error', (err: Error) => {
-    logger.error('Database pool error')
+    logger.error('Database pool error', err)
 })
 
 

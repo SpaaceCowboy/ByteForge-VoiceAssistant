@@ -24,7 +24,7 @@ interface JwtPayload {
 function getJwtSecret(): string {
     const secret = process.env.JWT_SECRET;
     if (!secret) {
-        throw new Error('JWT_SECRET enviroment variable is not set');
+        throw new Error('JWT_SECRET environment variable is not set');
     }
     return secret;
 }
@@ -32,31 +32,31 @@ function getJwtSecret(): string {
 export function signToken(userId: number, email: string, role: DashboardUserRole): string {
     const secret = getJwtSecret();
     const expiresIn = process.env.JWT_EXPIRES_IN || '8h';
-  
+
     return jwt.sign(
       { sub: userId, email, role } as JwtPayload,
       secret,
-      { expiresIn }
+      { expiresIn: expiresIn as string & jwt.SignOptions['expiresIn'] }
     );
   }
 
   export function verifyToken(token: string): JwtPayload | null {
     try {
         const secret = getJwtSecret();
-        return jwt.verify(token, secret) as JwtPayload;
+        return jwt.verify(token, secret) as unknown as JwtPayload;
     } catch {
         return null;
     }
   }
 
-  export function authenticate(
+  export async function authenticate(
     req: AuthenticatedRequest,
     res: Response,
     next: NextFunction
-  ): void {
+  ): Promise<void> {
     const authHeader = req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith('Bearer')) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
         res.status(401).json({ success: false, error: 'Authentication required'});
         return;
     }
@@ -69,37 +69,39 @@ export function signToken(userId: number, email: string, role: DashboardUserRole
         return;
     }
 
-    db.query<{ id: number; email: string, full_name: string; role: DashboardUserRole;
-        is_active: boolean }> (
+    try {
+        const result = await db.query<{
+            id: number; email: string; full_name: string;
+            role: DashboardUserRole; is_active: boolean;
+        }>(
             'SELECT id, email, full_name, role, is_active FROM dashboard_users WHERE id = $1',
             [payload.sub]
-        )
-            .then((result) => {
-                const user = result.rows[0];
+        );
 
-                if (!user) {
-                    res.status(401).json({ success: false, error: 'User not found'});
-                    return;
-                }
+        const user = result.rows[0];
 
-                if (!user.is_active) {
-                    res.status(403).json({ success: false, error: 'Account deactivated'});
-                    return;
-                }
+        if (!user) {
+            res.status(401).json({ success: false, error: 'User not found'});
+            return;
+        }
 
-                req.user = {
-                    id: user.id,
-                    email: user.email,
-                    fullName: user.full_name,
-                    role: user.role
-                };
+        if (!user.is_active) {
+            res.status(403).json({ success: false, error: 'Account deactivated'});
+            return;
+        }
 
-                next();
-            })
-            .catch((error) => {
-                logger.error('Auth middleware DB error', error);
-                res.status(500).json({ success: false, error: 'Authentication error'});
-            })
+        req.user = {
+            id: user.id,
+            email: user.email,
+            fullName: user.full_name,
+            role: user.role
+        };
+
+        next();
+    } catch (error) {
+        logger.error('Auth middleware DB error', error);
+        res.status(500).json({ success: false, error: 'Authentication error'});
+    }
   }
 
   export function requireRole(

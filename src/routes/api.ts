@@ -33,6 +33,15 @@ function asyncHandler(
   };
 }
 
+function parseIdParam(req: Request, res: Response): number | null {
+  const id = parseInt(req.params.id);
+  if (isNaN(id) || id <= 0) {
+    res.status(400).json({ success: false, error: 'Invalid ID' });
+    return null;
+  }
+  return id;
+}
+
 // ===========================================
 // HEALTH CHECK (public)
 // ===========================================
@@ -77,7 +86,8 @@ router.get(
 router.get(
   '/appointments/:id',
   asyncHandler(async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req, res);
+    if (id === null) return;
     const appointment = await appointmentModel.findById(id);
 
     if (!appointment) {
@@ -93,7 +103,8 @@ router.patch(
   '/appointments/:id',
   validateBody(appointmentModifySchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req, res);
+    if (id === null) return;
     const updates = req.body;
 
     const appointment = await appointmentModel.modify(id, {
@@ -122,7 +133,8 @@ router.delete(
   '/appointments/:id',
   validateBody(appointmentCancelSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req, res);
+    if (id === null) return;
     const { reason } = req.body;
 
     const appointment = await appointmentModel.cancel(id, reason);
@@ -164,7 +176,8 @@ router.get(
 router.get(
   '/patients/:id',
   asyncHandler(async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req, res);
+    if (id === null) return;
     const patient = await patientModel.findById(id);
 
     if (!patient) {
@@ -185,7 +198,8 @@ router.patch(
   requireRole('moderator'),
   validateBody(patientUpdateSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req, res);
+    if (id === null) return;
     const updates = req.body;
 
     const patient = await patientModel.update(id, {
@@ -386,7 +400,8 @@ router.patch(
   requireRole('moderator'),
   validateBody(faqUpdateSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req, res);
+    if (id === null) return;
     const updates = req.body;
 
     const faq = await faqModel.update(id, {
@@ -412,7 +427,8 @@ router.delete(
   '/faqs/:id',
   requireRole('moderator'),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req, res);
+    if (id === null) return;
 
     await faqModel.deactivate(id);
 

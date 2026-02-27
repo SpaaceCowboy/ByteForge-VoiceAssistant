@@ -108,8 +108,10 @@ export function parseTime(timeStr: string): string | null {
   for (const [word, num] of Object.entries(wordToNumber)) {
     if (input.includes(word)) {
       let hours = num;
-      // Assume PM for typical clinic hours (1-4 PM)
-      if (hours >= 1 && hours <= 4 && !input.includes('am') && !input.includes('morning')) {
+      // Assume PM for typical clinic hours (1-4) unless AM is explicit
+      if (hours >= 1 && hours <= 4
+        && !input.includes('am') && !input.includes('morning')
+        && !input.includes('midnight')) {
         hours += 12;
       }
       return `${hours.toString().padStart(2, '0')}:00`;

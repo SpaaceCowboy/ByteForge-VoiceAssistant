@@ -64,7 +64,7 @@ export async function checkAvailability(
     countQuery,
     countParams
   );
-  const currentBookings = parseInt(countResult.rows[0].count);
+  const currentBookings = parseInt(countResult.rows[0]?.count || '0');
 
   if (currentBookings >= maxPerSlot) {
     // Find alternative slots

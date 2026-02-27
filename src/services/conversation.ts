@@ -11,6 +11,7 @@ import type {
   Session,
   Patient,
   Appointment,
+  AppointmentType,
   Message,
   SessionState,
   CollectedData,
@@ -323,38 +324,41 @@ async function executeFunctionCall(
   }
 }
 
-// function handler 
+// function handler
 async function handleCheckAvailability(
   args: Record<string, unknown>
 ): Promise<FunctionExecutionResult> {
-  const date = String(args.date);
-  const time = String(args.time);
-  const partySize = parseInt(String(args.party_size));
+  try {
+    const date = String(args.date);
+    const time = String(args.time);
 
-  // validate inputys
-  const validation = validateAppointment(date, time);
-  if (!validation.valid) {
-    return {success: false, error: validation.error};
-  }
+    // validate inputs
+    const validation = validateAppointment(date, time);
+    if (!validation.valid) {
+      return {success: false, error: validation.error};
+    }
 
-let doctorId: number | undefined;
-if (args.doctor_name) {
-  const doctor = await findDoctorByName(String(args.doctor_name));
-  if (doctor) doctorId = doctor.id
-}
+    let doctorId: number | undefined;
+    if (args.doctor_name) {
+      const doctor = await findDoctorByName(String(args.doctor_name));
+      if (doctor) doctorId = doctor.id
+    }
 
-let locationId: number | undefined;
-if (args.location) {
-  const location = await findLocationByName(String(args.location));
-  if (location) locationId = location.id
-}
+    let locationId: number | undefined;
+    if (args.location) {
+      const location = await findLocationByName(String(args.location));
+      if (location) locationId = location.id
+    }
 
-  //check availability
-  const availability = await appointmentModel.checkAvailability(date, time, doctorId, locationId)
+    const availability = await appointmentModel.checkAvailability(date, time, doctorId, locationId)
 
-  return {
-    success: true,
-    data: availability,
+    return {
+      success: true,
+      data: availability,
+    }
+  } catch (error) {
+    logger.error('Failed to check availability', error);
+    return { success: false, error: 'Failed to check availability' };
   }
 }
 
@@ -410,12 +414,12 @@ async function handleBookAppointment(
       locationId,
       date,
       time,
-      appointmentType: (args.appointment_type as string) || 'consultation',
+      appointmentType: (args.appointment_type as AppointmentType) || 'consultation',
       reasonForVisit: args.reason_for_visit ? String(args.reason_for_visit) : undefined,
       specialInstructions: args.special_instructions
         ? String(args.special_instructions)
         : undefined,
-      isNewPatient: args.is_new_patient === 'true',
+      isNewPatient: args.is_new_patient === true || args.is_new_patient === 'true',
       source: 'phone_ai',
     });
 
@@ -539,24 +543,29 @@ async function handleGetAppointments(
     return { success: true, data: { appointments: [] } };
   }
 
-  const appointments = await appointmentModel.findUpcomingByPatient(session.patient.id);
+  try {
+    const appointments = await appointmentModel.findUpcomingByPatient(session.patient.id);
 
-  return {
-    success: true,
-    data: {
-      appointments: appointments.map((a) => ({
-        id: a.id,
-        date: a.appointment_date,
-        time: a.appointment_time,
-        doctorName: a.doctor_name || 'To be assigned',
-        departmentName: a.department_name,
-        locationName: a.location_name,
-        appointmentType: a.appointment_type,
-        status: a.status,
-        confirmationCode: a.confirmation_code,
-      })),
-    },
-  };
+    return {
+      success: true,
+      data: {
+        appointments: appointments.map((a) => ({
+          id: a.id,
+          date: a.appointment_date,
+          time: a.appointment_time,
+          doctorName: a.doctor_name || 'To be assigned',
+          departmentName: a.department_name,
+          locationName: a.location_name,
+          appointmentType: a.appointment_type,
+          status: a.status,
+          confirmationCode: a.confirmation_code,
+        })),
+      },
+    };
+  } catch (error) {
+    logger.error('Failed to get appointments', error);
+    return { success: false, error: 'Failed to retrieve appointments' };
+  }
 }
 
 async function handleUpdatePatientInfo(
@@ -567,33 +576,38 @@ async function handleUpdatePatientInfo(
     return { success: false, error: 'Patient not found' };
   }
 
-  const updateData: Record<string, unknown> = {};
+  try {
+    const updateData: Record<string, unknown> = {};
 
-  if (args.name) {
-    updateData.full_name = String(args.name);
-  }
-  if (args.insurance_provider) {
-    updateData.insurance_provider = String(args.insurance_provider);
-  }
-  if (args.insurance_id) {
-    updateData.insurance_id = String(args.insurance_id);
-  }
-  if (args.email) {
-    updateData.email = String(args.email);
-  }
+    if (args.name) {
+      updateData.full_name = String(args.name);
+    }
+    if (args.insurance_provider) {
+      updateData.insurance_provider = String(args.insurance_provider);
+    }
+    if (args.insurance_id) {
+      updateData.insurance_id = String(args.insurance_id);
+    }
+    if (args.email) {
+      updateData.email = String(args.email);
+    }
 
-  await patientModel.update(session.patient.id, updateData);
+    await patientModel.update(session.patient.id, updateData);
 
-  // Update session with new patient data
-  const updatedPatient = { ...session.patient, ...updateData };
-  await redis.updateSession(session.callSid, {
-    patient: updatedPatient as Patient,
-  });
+    // Update session with new patient data
+    const updatedPatient = { ...session.patient, ...updateData };
+    await redis.updateSession(session.callSid, {
+      patient: updatedPatient as Patient,
+    });
 
-  return {
-    success: true,
-    data: { updated: Object.keys(updateData) },
-  };
+    return {
+      success: true,
+      data: { updated: Object.keys(updateData) },
+    };
+  } catch (error) {
+    logger.error('Failed to update patient info', error);
+    return { success: false, error: 'Failed to update patient information' };
+  }
 }
 async function handleGetDepartmentInfo(
   args: Record<string, unknown>
@@ -679,7 +693,7 @@ async function handleTransfer(
   args: Record<string, unknown>
 ): Promise<FunctionExecutionResult> {
   const reason = String(args.reason);
-  const notes = args.notes ? String (args.notes) : undefined;
+  const notes = args.notes ? String(args.notes) : undefined;
 
   await callLogModel.markTransferred(callSid, reason);
 
@@ -695,17 +709,27 @@ async function handleEndCall(
   callSid: string,
   session: Session
 ): Promise<FunctionExecutionResult> {
-  // generate summarty analysis
   const refreshedSession = await redis.getSession(callSid);
-  const transcript = refreshedSession?.messageHistory
-  .map(m => `[${m.role}]: ${m.content}`)
-  .join('\n') || '';
+  const transcript = (refreshedSession?.messageHistory || [])
+    .map(m => `[${m.role}]: ${m.content}`)
+    .join('\n');
 
-  const [summary, intent, sentiment] = await Promise.all([
-    openaiService.generateCallSummary(transcript),
-    openaiService.detectIntent(transcript),
-    openaiService.analyzeSentiment(transcript),
-  ])
+  let summary = '';
+  let intent = 'unknown';
+  let sentiment = { sentiment: 'neutral', score: 0 };
+
+  try {
+    const [summaryResult, intentResult, sentimentResult] = await Promise.all([
+      openaiService.generateCallSummary(transcript),
+      openaiService.detectIntent(transcript),
+      openaiService.analyzeSentiment(transcript),
+    ]);
+    summary = summaryResult;
+    intent = intentResult;
+    sentiment = sentimentResult;
+  } catch (error) {
+    logger.error('Failed to generate call analysis', error);
+  }
 
   //complete the call log
   await callLogModel.completeCall(callSid, {

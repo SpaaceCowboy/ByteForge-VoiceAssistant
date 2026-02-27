@@ -22,19 +22,19 @@ export function validateTwilioWebhook(
     const authToken = process.env.TWILIO_AUTH_TOKEN;
 
     if (!authToken) {
-        logger.error('TWILIO_AUTH_TOKE not set - cannot validate webhooks');
+        logger.error('TWILIO_AUTH_TOKEN not set - cannot validate webhooks');
         res.status(500).json({ error: 'Server misconfigured'});
         return;
     }
 
-    const twilioSignature = req.headers['x-twilio-signatuer'] as string;
+    const twilioSignature = req.headers['x-twilio-signature'] as string;
 
     if (!twilioSignature) {
         logger.warn('Rejected request: missing x-Twilio-signature', {
             ip: req.ip,
             path: req.path,
         });
-        res.status(403).json({error: 'Forbiddeb: missing signaturee'});
+        res.status(403).json({error: 'Forbidden: missing signature'});
         return;
     }
 

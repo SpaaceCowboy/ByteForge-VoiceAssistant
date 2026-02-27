@@ -68,6 +68,8 @@ export function createLiveTranscription(callbacks: DeepgramCallbacks): DeepgramC
     //error handling
     connection.on(LiveTranscriptionEvents.Error, (error) => {
         logger.error('Deepgram error', error);
+        isOpen = false;
+        try { connection.finish(); } catch { /* already closed */ }
         if (callbacks.onError) {
             callbacks.onError(error instanceof Error ? error : new Error(String(error)));
         }

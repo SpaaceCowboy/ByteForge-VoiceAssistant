@@ -247,9 +247,13 @@ async function shutdown(signal: string): Promise<void> {
   }, 10000);
 
   try {
-    server.close(() => {
-      logger.info('HTTP server closed');
+    await new Promise<void>((resolve, reject) => {
+      server.close((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
     });
+    logger.info('HTTP server closed');
 
     await redis.disconnect();
     await database.closePool();
